@@ -1,0 +1,2043 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>无限网格 · 相机补间动画器</title>
+<style>
+  :root{
+    --panel:#15171c;
+    --panel2:#1d2026;
+    --border:#2a2e37;
+    --text:#d7dbe2;
+    --text-dim:#8b93a3;
+    --accent:#4da3ff;
+    --accent2:#ffb648;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;background:#0b0d10;color:var(--text);
+    font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;font-size:13px;}
+  #app{display:flex;height:100%;}
+
+  /* ===== 左侧面板 ===== */
+  #sidebar{
+    width:330px;min-width:330px;background:var(--panel);border-right:1px solid var(--border);
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+  #sidebar header{
+    padding:12px 14px;border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg,#1b1f27,#15171c);
+  }
+  #sidebar header h1{font-size:14px;font-weight:600;letter-spacing:.5px;}
+  #sidebar header p{font-size:11px;color:var(--text-dim);margin-top:2px;}
+  #tabs{display:flex;border-bottom:1px solid var(--border);background:var(--panel2);}
+  #tabs button{
+    flex:1;padding:8px 0;background:none;border:none;color:var(--text-dim);
+    cursor:pointer;font-size:12px;border-bottom:2px solid transparent;transition:.15s;
+  }
+  #tabs button.active{color:var(--accent);border-bottom-color:var(--accent);}
+  #modeBar{padding:8px 10px;background:var(--panel2);border-bottom:1px solid var(--border);}
+  #modeBar select{width:100%;}
+  #flamePanel{padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--border);display:none;}
+  #tabBody{flex:1;overflow-y:auto;padding:12px 14px;}
+  #tabBody::-webkit-scrollbar{width:8px;}
+  #tabBody::-webkit-scrollbar-thumb{background:#33383f;border-radius:4px;}
+
+  .sec{margin-bottom:14px;}
+  .sec h3{
+    font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;
+    margin-bottom:8px;display:flex;align-items:center;gap:6px;
+  }
+  .sec h3::before{content:"";width:3px;height:11px;background:var(--accent);border-radius:1px;display:inline-block;}
+
+  .row{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+  .row label{width:74px;flex-shrink:0;color:var(--text-dim);font-size:12px;}
+  .row input[type=range]{flex:1;accent-color:var(--accent);}
+  .row input[type=color]{width:34px;height:24px;padding:0;border:1px solid var(--border);background:none;cursor:pointer;border-radius:4px;}
+  .row .val{width:44px;text-align:right;color:var(--text);font-size:11px;font-variant-numeric:tabular-nums;}
+  .row .val.wide{width:64px;}
+
+  select,input[type=text]{
+    background:var(--panel2);border:1px solid var(--border);color:var(--text);
+    border-radius:4px;padding:4px 6px;font-size:12px;outline:none;width:100%;
+  }
+  select:focus,input[type=text]:focus{border-color:var(--accent);}
+  input[type=checkbox]{accent-color:var(--accent);}
+
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    background:var(--panel2);border:1px solid var(--border);color:var(--text);
+    border-radius:5px;padding:6px 10px;font-size:12px;cursor:pointer;transition:.15s;
+    user-select:none;
+  }
+  .btn:hover{border-color:var(--accent);color:var(--accent);}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#0b0d10;font-weight:600;}
+  .btn.primary:hover{filter:brightness(1.1);color:#0b0d10;}
+  .btn.warn{background:#e5484d;border-color:#e5484d;color:#fff;font-weight:600;}
+  .btn.warn:hover{filter:brightness(1.1);color:#fff;}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+  .btn.small{padding:3px 8px;font-size:11px;}
+  .btnrow{display:flex;gap:8px;margin-bottom:8px;}
+  .btnrow .btn{flex:1;}
+
+  .hint{font-size:11px;color:var(--text-dim);line-height:1.6;margin-bottom:8px;}
+  .kfCard{
+    background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:8px;
+  }
+  .kfCard .kfTitle{font-size:12px;font-weight:600;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;}
+  .kfCard .kfTitle span.badge{font-size:10px;color:#0b0d10;padding:1px 7px;border-radius:9px;font-weight:700;}
+  .kfCard .badge.A{background:var(--accent);}
+  .kfCard .badge.B{background:var(--accent2);}
+  .kfCoords{font-size:10px;color:var(--text-dim);font-family:Consolas,monospace;white-space:pre-line;line-height:1.5;margin-top:4px;}
+
+  /* ===== s-t 曲线编辑器 ===== */
+  #curveWrap{
+    position:relative;background:var(--panel2);border:1px solid var(--border);
+    border-radius:6px;padding:6px;touch-action:none;
+  }
+  #curveCanvas{display:block;width:100%;cursor:crosshair;}
+  #curveStatus{font-size:11px;color:var(--text-dim);margin-top:6px;line-height:1.5;}
+
+  /* ===== 导出区 ===== */
+  #exportStatus{font-size:11px;color:var(--text-dim);margin-top:8px;line-height:1.6;min-height:16px;}
+  #exportStatus.ok{color:#5fd35f;}
+  #exportStatus.err{color:#ff7a7a;}
+
+  /* ===== 右侧 3D 视口 ===== */
+  #viewport{flex:1;position:relative;background:#0b0d10;}
+  #glCanvas{display:block;width:100%;height:100%;}
+  .overlay{
+    position:absolute;pointer-events:none;font-size:11px;color:var(--text-dim);
+    background:rgba(11,13,16,.72);border:1px solid var(--border);border-radius:6px;padding:6px 10px;
+  }
+  #helpBar{left:12px;bottom:12px;max-width:340px;line-height:1.7;}
+  #recBadge{
+    display:none;top:12px;left:50%;transform:translateX(-50%);
+    color:#fff;background:#e5484d;border-color:#e5484d;font-weight:700;align-items:center;gap:8px;
+  }
+  #recBadge .dot{width:9px;height:9px;border-radius:50%;background:#fff;animation:blink 1s infinite;}
+  @keyframes blink{50%{opacity:.25;}}
+  #playBadge{display:none;top:12px;left:50%;transform:translateX(-50%);color:#fff;background:rgba(11,13,16,.8);}
+  #timeBadge{right:12px;top:12px;font-variant-numeric:tabular-nums;font-family:Consolas,monospace;}
+
+  .togglerow{display:flex;align-items:center;gap:8px;margin-bottom:7px;cursor:pointer;font-size:12px;color:var(--text);}
+  .togglerow input{margin:0;}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- ================= 左侧面板 ================= -->
+  <aside id="sidebar">
+    <header>
+      <h1>无限网格 · 相机补间动画器</h1>
+      <p>可调外观网格地面 · 首尾帧相机补间 · s-t 曲线变速 · 透明背景导出</p>
+    </header>
+    <div id="modeBar">
+      <select id="modeSel">
+        <option value="tool" selected>① 网格相机动画器（补间 / 贴图 / 导出）</option>
+        <option value="flame">② 火焰特效（实时粒子动画）</option>
+        <option value="lightning">③ 闪电特效（随机折线闪电）</option>
+      </select>
+    </div>
+    <div id="tabs">
+      <button data-tab="grid" class="active">网格</button>
+      <button data-tab="camera">相机</button>
+      <button data-tab="motion">动画</button>
+      <button data-tab="img">贴图</button>
+      <button data-tab="export">导出</button>
+    </div>
+    <div id="tabBody">
+    <div id="flamePanel">
+      <div class="sec">
+        <h3>火焰参数</h3>
+        <div class="row"><label>喷射方向X</label><input type="range" id="flameDirX" min="-1" max="1" step="0.05" value="0"><span class="val" id="flameDirXVal">0.00</span></div>
+        <div class="row"><label>喷射方向Z</label><input type="range" id="flameDirZ" min="-1" max="1" step="0.05" value="0"><span class="val" id="flameDirZVal">0.00</span></div>
+        <div class="row"><label>方向变化范围</label><input type="range" id="flameSpread" min="0" max="1" step="0.01" value="0.3"><span class="val" id="flameSpreadVal">0.30</span></div>
+        <div class="row"><label>扰动速度</label><input type="range" id="flameDirJitter" min="0.1" max="10" step="0.1" value="1"><span class="val" id="flameDirJitterVal">1.0</span></div>
+        <div class="row"><label>初速度</label><input type="range" id="flameVel" min="0.1" max="8" step="0.1" value="0.6"><span class="val" id="flameVelVal">0.6</span></div>
+        <div class="row"><label>发光</label><input type="range" id="flameGlow" min="0" max="2.5" step="0.05" value="1"><span class="val" id="flameGlowVal">1.00</span></div>
+        <div class="row"><label>喷出量</label><input type="range" id="flameDensity" min="0.1" max="8" step="0.05" value="1"><span class="val" id="flameDensityVal">1.00</span></div>
+        <div class="row"><label>粒子大小</label><input type="range" id="flameSize" min="0.1" max="10" step="0.05" value="0.9"><span class="val" id="flameSizeVal">0.90</span></div>
+        <div class="row"><label>寿命</label><input type="range" id="flameLife" min="0.1" max="10" step="0.05" value="1.1"><span class="val" id="flameLifeVal">1.10</span></div>
+        <div class="row"><label>寿命浮动</label><input type="range" id="flameLifeVar" min="0" max="1" step="0.05" value="0.25"><span class="val" id="flameLifeVarVal">0.25</span></div>
+        <div class="row"><label>焰心色</label><input type="color" id="flameC1" value="#fffae5"><span class="val" id="flameC1Val">#fffae5</span></div>
+        <div class="row"><label>第二色</label><input type="color" id="flameC2" value="#ffdb73"><span class="val" id="flameC2Val">#ffdb73</span></div>
+        <div class="row"><label>第三色</label><input type="color" id="flameC3" value="#ff8c29"><span class="val" id="flameC3Val">#ff8c29</span></div>
+        <div class="row"><label>外焰色</label><input type="color" id="flameC4" value="#cc400f"><span class="val" id="flameC4Val">#cc400f</span></div>
+        <div class="row"><label>噪声层数</label><input type="range" id="flameOct" min="1" max="6" step="1" value="4"><span class="val" id="flameOctVal">4</span></div>
+        <div class="togglerow"><input type="checkbox" id="flameGround"><label for="flameGround">显示暗色地面（默认隐藏）</label></div>
+        <h3 style="margin-top:12px">火星参数</h3>
+        <div class="row"><label>火星数量</label><input type="range" id="sparkCount" min="0" max="300" step="10" value="60"><span class="val" id="sparkCountVal">60</span></div>
+        <div class="row"><label>火星大小</label><input type="range" id="sparkSize" min="0.5" max="5" step="0.1" value="2.2"><span class="val" id="sparkSizeVal">2.2</span></div>
+        <div class="row"><label>火星初速</label><input type="range" id="sparkVel" min="0.2" max="5" step="0.1" value="1"><span class="val" id="sparkVelVal">1.0</span></div>
+        <div class="row"><label>火星寿命</label><input type="range" id="sparkLife" min="0.3" max="3" step="0.1" value="1.3"><span class="val" id="sparkLifeVal">1.3</span></div>
+        <p class="hint">火焰为连续体积渲染（无颗粒），从一点火源长出锥形火苗；无需播放，可直接用「导出」页录制透明背景视频/GIF 或导出 PNG 帧。相机操作与网格模式一致（左键旋转 / 滚轮缩放 / 中键平移）。</p>
+      </div>
+    </div>
+    <div id="lightningPanel" style="display:none">
+      <div class="sec">
+        <h3>闪电参数</h3>
+        <div class="row"><label>触发间隔</label><input type="range" id="boltFreq" min="0.5" max="10" step="0.1" value="3"><span class="val" id="boltFreqVal">3.0s</span></div>
+        <div class="row"><label>分支数量</label><input type="range" id="boltBranches" min="0" max="6" step="1" value="3"><span class="val" id="boltBranchesVal">3</span></div>
+        <div class="row"><label>分叉权重</label><input type="range" id="boltFork" min="0.2" max="3" step="0.05" value="1"><span class="val" id="boltForkVal">1.00</span></div>
+        <div class="row"><label>强度</label><input type="range" id="boltGlow" min="0.3" max="2.5" step="0.05" value="1"><span class="val" id="boltGlowVal">1.00</span></div>
+        <div class="row"><label>粗细</label><input type="range" id="boltThick" min="0.3" max="3" step="0.05" value="1"><span class="val" id="boltThickVal">1.00</span></div>
+        <div class="row"><label>模糊</label><input type="range" id="boltBlur" min="0.3" max="2.5" step="0.05" value="1"><span class="val" id="boltBlurVal">1.00</span></div>
+        <div class="row"><label>闪电颜色</label><input type="color" id="boltColor" value="#dceeff"><span class="val" id="boltColorVal">#dceeff</span></div>
+        <div class="btnrow"><button class="btn primary" id="btnBolt" style="flex:1">⚡ 立即激发闪电</button></div>
+        <p class="hint">闪电为随机折线，周期性劈落并闪烁衰减；无需播放，可直接用「导出」页录制透明背景视频/GIF 或导出 PNG 帧。相机操作与网格模式一致。</p>
+      </div>
+    </div>
+
+      <!-- ===== 网格外观 ===== -->
+      <div id="tab-grid" class="tabpage">
+        <div class="sec">
+          <h3>网格外观</h3>
+          <div class="row"><label>网格颜色</label><input type="color" id="gridColor" value="#7aa8ff"><span class="val" id="gridColorVal">#7aa8ff</span></div>
+          <div class="row"><label>不透明度</label><input type="range" id="gridOpacity" min="0" max="1" step="0.01" value="0.85"><span class="val" id="gridOpacityVal">0.85</span></div>
+          <div class="row"><label>网格间距</label><input type="range" id="gridFine" min="0.2" max="10" step="0.1" value="1"><span class="val wide" id="gridFineVal">1.0</span></div>
+          <div class="row"><label>延伸淡出</label><input type="range" id="gridFade" min="30" max="2000" step="10" value="400"><span class="val" id="gridFadeVal">400</span></div>
+          <div class="togglerow"><input type="checkbox" id="gridOn" checked><label for="gridOn">显示网格</label></div>
+          <p class="hint">均匀网格向四周一直延伸到"延伸淡出"距离再柔和消失（像地平线雾化），数值越大延伸越远。</p>
+        </div>
+        <div class="sec">
+          <h3>参考物体</h3>
+          <div class="togglerow"><input type="checkbox" id="refOn"><label for="refOn">显示坐标轴（默认隐藏）</label></div>
+          <p class="hint">坐标轴（红X 绿Y 蓝Z）帮助观察相机运动方向，需要时可打开。</p>
+        </div>
+      </div>
+
+      <!-- ===== 相机 ===== -->
+      <div id="tab-camera" class="tabpage" style="display:none">
+        <div class="sec">
+          <h3>视角相机</h3>
+          <div class="row"><label>FOV 视场角</label><input type="range" id="camFov" min="20" max="110" step="1" value="50"><span class="val" id="camFovVal">50°</span></div>
+          <div class="row"><label>位置</label><span class="val wide" id="camPosText" style="width:auto;text-align:left">—</span></div>
+          <p class="hint">鼠标左键拖拽旋转 · 滚轮滚动缩放 · 按住滚轮（中键）拖拽平移。相机位置会实时显示在下方。</p>
+          <div class="btnrow">
+            <button class="btn" id="btnResetView">重置视角</button>
+            <button class="btn" id="btnTopView">顶视图</button>
+          </div>
+        </div>
+        <div class="sec">
+          <h3>首尾帧</h3>
+          <p class="hint">调整好相机后，点击"设为起点/终点"分别记录首帧和尾帧；补间会在两帧之间运动。</p>
+          <div class="kfCard">
+            <div class="kfTitle"><span>A · 起始帧 <span class="badge A">A</span></span>
+              <button class="btn small" id="btnSetA">设为起点</button></div>
+            <div class="kfCoords" id="kfAText">未设置</div>
+          </div>
+          <div class="kfCard">
+            <div class="kfTitle"><span>B · 结束帧 <span class="badge B">B</span></span>
+              <button class="btn small" id="btnSetB">设为终点</button></div>
+            <div class="kfCoords" id="kfBText">未设置</div>
+          </div>
+        </div>
+        <div class="sec">
+          <h3>补间锚点（可选）</h3>
+          <p class="hint">锚点是 A、B 之间的中间关键帧，相机路径会<u>依次平滑穿过</u>所有锚点。先调好视角再点"添加锚点"。</p>
+          <div class="togglerow"><input type="checkbox" id="showPath" checked><label for="showPath">显示相机运动路径（黄色曲线）</label></div>
+          <div id="anchorList"></div>
+          <div class="btnrow">
+            <button class="btn" id="btnAddAnchor">＋ 添加锚点（当前视角）</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 动画 ===== -->
+      <div id="tab-motion" class="tabpage" style="display:none">
+        <div class="sec">
+          <h3>补间参数</h3>
+          <div class="row"><label>时长(秒)</label><input type="range" id="animDuration" min="0.2" max="60" step="0.1" value="4"><span class="val" id="animDurationVal">4.0s</span></div>
+          <div class="row"><label>循环播放</label><input type="checkbox" id="loopAnim" style="flex:0" checked></div>
+        </div>
+        <div class="sec">
+          <h3>s-t 曲线（运动速率）</h3>
+          <p class="hint">
+            横轴 t = 时间进度，纵轴 s = 路径进度。曲线斜率 = 速度。<br>
+            <b style="color:var(--accent)">单击添加控制点</b> · <b style="color:var(--accent)">拖拽移动</b> · <b style="color:var(--accent)">双击删除</b>（首尾点固定）。<br>
+            例如：先慢后快（凹曲线）、先快后慢（凸曲线）、中途停顿（平台段）。
+          </p>
+          <div class="togglerow"><input type="checkbox" id="curveSmooth" checked><label for="curveSmooth">平滑曲线（速度连续变化，消除折线拐点的速度突变）</label></div>
+          <div id="curveWrap">
+            <canvas id="curveCanvas" width="560" height="300"></canvas>
+          </div>
+          <div id="curveStatus">当前曲线：匀速</div>
+        </div>
+        <div class="sec">
+          <h3>控制</h3>
+          <div class="btnrow">
+            <button class="btn primary" id="btnPlay">▶ 播放</button>
+            <button class="btn" id="btnStop">■ 停止/复位</button>
+          </div>
+          <div class="btnrow">
+            <button class="btn" id="btnResetCurve">重置曲线为匀速</button>
+            <button class="btn" id="btnSwapKF">交换 A/B 帧</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 地板贴图 ===== -->
+      <div id="tab-img" class="tabpage" style="display:none">
+        <div class="sec">
+          <h3>地板贴图（PNG）</h3>
+          <p class="hint">导入一个或多个 PNG 贴在地面上（贴图会显示在网格上方）。可分别调整每张的位置、大小、旋转与不透明度；贴图会随场景一起导出。</p>
+          <div class="btnrow">
+            <button class="btn" id="btnImportImg" style="flex:1">＋ 导入 PNG…</button>
+          </div>
+          <input type="file" id="imgFile" accept="image/*" multiple style="display:none">
+          <div id="imgList"><p class="hint">尚未导入贴图。</p></div>
+        </div>
+      </div>
+
+      <!-- ===== 导出 ===== -->
+      <div id="tab-export" class="tabpage" style="display:none">
+        <div class="sec">
+          <h3>背景</h3>
+          <div class="row"><label>背景模式</label>
+            <select id="bgMode">
+              <option value="transparent" selected>透明（视频无背景色）</option>
+              <option value="color">纯色</option>
+            </select>
+          </div>
+          <div class="row" id="bgColorRow" style="display:none"><label>背景颜色</label><input type="color" id="bgColor" value="#1a1d24"><span class="val" id="bgColorVal">#1a1d24</span></div>
+          <p class="hint">选择"透明"时，WebM 导出<u>不含任何背景颜色</u>（VP9 保留 Alpha 通道，可在支持透明视频的剪辑软件中叠加）。MP4 编码不支持透明，录制时会自动使用你设置的背景色。</p>
+        </div>
+        <div class="sec">
+          <h3>导出视频</h3>
+          <div class="row"><label>动画时长</label><input type="range" id="animDuration2" min="0.2" max="60" step="0.1" value="4"><span class="val" id="animDurationVal2">4.0s</span></div>
+          <div class="row"><label>视频格式</label>
+            <select id="vidFmt">
+              <option value="webm" selected>WebM（保留透明背景）</option>
+              <option value="mp4">MP4（H.264，兼容广，无透明）</option>
+              <option value="gif">GIF（动画，透明背景，256色）</option>
+            </select>
+          </div>
+          <div class="row" id="fpsRow"><label>帧率 FPS</label><input type="range" id="fps" min="15" max="60" step="1" value="30"><span class="val" id="fpsVal">30</span></div>
+          <div class="row" id="bitrateRow"><label>码率 Mbps</label><input type="range" id="bitrate" min="2" max="30" step="1" value="12"><span class="val" id="bitrateVal">12</span></div>
+          <div id="gifOpts" style="display:none">
+            <div class="row"><label>GIF 帧率</label><input type="range" id="gifFps" min="5" max="30" step="1" value="15"><span class="val" id="gifFpsVal">15</span></div>
+            <div class="row"><label>尺寸缩放</label><input type="range" id="gifScale" min="25" max="100" step="5" value="100"><span class="val" id="gifScaleVal">100%</span></div>
+            <p class="hint">GIF 为二值透明（无半透明），256 色；帧率与尺寸越大文件越大。</p>
+          </div>
+          <div class="btnrow">
+            <button class="btn primary" id="btnExport" style="flex:1">⬇ 录制并导出视频</button>
+          </div>
+          <p class="hint">录制时自动从首帧播放到尾帧并实时渲染；录制过程请保持页面在前台。导出文件名：<span id="exportName">camera-tween.webm</span><br>
+          注：浏览器无法直接录制 FLV；如需 FLV，可用本页导出的 MP4/WebM 经格式转换工具（如 ffmpeg）转出。</p>
+          <div id="exportStatus">就绪。</div>
+        </div>
+        <div class="sec">
+          <h3>导出当前帧</h3>
+          <div class="row"><label>分辨率</label>
+            <select id="pngRes">
+              <option value="viewport">当前视口</option>
+              <option value="1280">宽 1280（720p）</option>
+              <option value="1920">宽 1920（1080p）</option>
+              <option value="2560">宽 2560（2K）</option>
+              <option value="3840" selected>宽 3840（4K）</option>
+              <option value="5120">宽 5120（5K）</option>
+            </select>
+          </div>
+          <div class="btnrow">
+            <button class="btn" id="btnPNG" style="flex:1">🖼 导出当前帧 PNG（透明背景）</button>
+          </div>
+          <p class="hint">高度按当前视口宽高比自动匹配（如 16:9 时 3840 宽 = 3840×2160）。"透明"背景下 PNG 背景为透明。</p>
+        </div>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- ================= 右侧视口 ================= -->
+  <div id="viewport">
+    <canvas id="glCanvas"></canvas>
+    <div class="overlay" id="helpBar">
+      🖱 左键拖拽 = 旋转视角 &nbsp;·&nbsp; 滚轮滚动 = 缩放 &nbsp;·&nbsp; 按住滚轮（中键）拖拽 = 平移<br>
+      在「相机」页把当前视角设为 A / B 帧，再到「动画」页编辑 s-t 曲线并播放。
+    </div>
+    <div class="overlay" id="recBadge"><span class="dot"></span> 录制中…</div>
+    <div class="overlay" id="playBadge">▶ 播放中</div>
+    <div class="overlay" id="timeBadge">t=0.00s / 4.00s</div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+    "gifenc": "https://cdn.jsdelivr.net/npm/gifenc@1.0.3/+esm"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { GIFEncoder, quantize, applyPalette } from 'gifenc';
+
+/* ============================================================
+ * 全局状态
+ * ============================================================ */
+const $ = id => document.getElementById(id);
+
+let mode = 'tool';   // 当前模式（置于顶部，避免顶层调用时 TDZ 报错）
+
+const state = {
+  bgMode: 'transparent', bgColor: '#1a1d24',
+  exporting: false,      // GIF 导出期间暂停 rAF 粒子更新，避免双循环冲突
+  kfA: null,            // {pos:Vector3, quat:Quaternion}
+  kfB: null,
+  anchors: [],          // 中间锚点（同结构，按顺序排列）
+  animTime: 0,
+  playing: false,
+  recording: false,
+  recStart: 0,
+  recChunks: [],
+  recorder: null,
+};
+
+/* ============================================================
+ * 渲染器 / 场景 / 相机
+ * ============================================================ */
+const canvas = $('glCanvas');
+const renderer = new THREE.WebGLRenderer({
+  canvas,
+  antialias: true,
+  alpha: true,                 // 允许透明背景（导出无背景色）
+  preserveDrawingBuffer: true, // 供 captureStream 录制
+});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x000000, 0);
+
+const scene = new THREE.Scene();
+scene.background = null; // 透明
+
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 8000);
+camera.position.set(9, 6, 9);
+
+/* FPS 式相机控制：左键原地转动朝向 · 滚轮以鼠标为锚点缩放 · 中键平移（pointer capture 防卡死） */
+class FPSControls {
+  constructor(camera, dom){
+    this.camera = camera;
+    this.dom = dom;
+    this.enabled = true;
+    this.target = new THREE.Vector3();   // 兼容字段：相机前方参考点
+    this._yaw = 0; this._pitch = 0;
+    this._drag = false; this._btn = -1;
+    this._lx = 0; this._ly = 0;
+    this._dolly = 0;
+    this._pan = new THREE.Vector3();
+    const onDown = e => {
+      if(!this.enabled) return;
+      e.preventDefault();
+      this._drag = true; this._btn = e.button;
+      this._lx = e.clientX; this._ly = e.clientY;
+      if(this.dom.setPointerCapture){ try{ this.dom.setPointerCapture(e.pointerId); }catch(_){} }
+    };
+    const onMove = e => {
+      if(!this._drag) return;
+      e.preventDefault();
+      const dx = e.clientX - this._lx, dy = e.clientY - this._ly;
+      this._lx = e.clientX; this._ly = e.clientY;
+      if(this._btn === 0){
+        this._yaw -= dx * 0.005;
+        this._pitch = Math.max(-1.55, Math.min(1.55, this._pitch - dy * 0.005));
+      } else if(this._btn === 1){
+        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
+        const up = new THREE.Vector3(0, 1, 0);
+        this._pan.addScaledVector(right, -dx * 0.008).addScaledVector(up, dy * 0.008);
+      }
+      this.update();   // 实时应用旋转/平移，确保拖动即时生效
+    };
+    const onUp = () => { this._drag = false; };
+    const onWheel = e => {
+      if(!this.enabled) return;
+      e.preventDefault();
+      this._lx = e.clientX; this._ly = e.clientY;   // 记录鼠标位置，作为缩放锚点
+      this._dolly -= e.deltaY * 0.006;   // 滚轮向上(deltaY<0)→推近；向下→拉远
+      this.update();
+    };
+    dom.addEventListener('pointerdown', onDown);
+    dom.addEventListener('pointermove', onMove);
+    dom.addEventListener('pointerup', onUp);
+    dom.addEventListener('pointercancel', onUp);
+    dom.addEventListener('wheel', onWheel, { passive: false });
+  }
+  lookAt(x, y, z){
+    const dir = new THREE.Vector3(x - this.camera.position.x, y - this.camera.position.y, z - this.camera.position.z).normalize();
+    const e = new THREE.Euler().setFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), dir), 'YXZ');
+    this._yaw = e.y; this._pitch = e.x;
+    this.update();
+  }
+  /* 外部（补间等）设置了相机朝向时同步角度状态，避免 update() 覆盖 */
+  syncFromCamera(){
+    const e = new THREE.Euler().setFromQuaternion(this.camera.quaternion, 'YXZ');
+    this._yaw = e.y; this._pitch = e.x;
+  }
+  update(){
+    if(this._pan.lengthSq() > 0){ this.camera.position.add(this._pan); this._pan.set(0, 0, 0); }
+    if(this._dolly){
+      // 以鼠标所在位置为锚点缩放：鼠标指向的场景点保持屏幕位置不变
+      const rect = this.dom.getBoundingClientRect();
+      const nx = ((this._lx - rect.left) / rect.width) * 2 - 1;
+      const ny = -((this._ly - rect.top) / rect.height) * 2 + 1;
+      const tanF = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+      const dirCam = new THREE.Vector3(nx * tanF * this.camera.aspect, ny * tanF, -1).normalize();
+      const dirWorld = dirCam.clone().applyQuaternion(this.camera.quaternion);
+      const anchor = this.camera.position.clone().addScaledVector(dirWorld, 20);
+      const toAnchor = anchor.clone().sub(this.camera.position).normalize();
+      this.camera.position.addScaledVector(toAnchor, this._dolly);
+      this._dolly = 0;
+    }
+    this.camera.quaternion.setFromEuler(new THREE.Euler(this._pitch, this._yaw, 0, 'YXZ'));
+    const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    this.target.copy(this.camera.position).addScaledVector(dir, 20);
+  }
+}
+const controls = new FPSControls(camera, renderer.domElement);
+controls.lookAt(0, 0, 0);
+controls.update();
+
+/* ============================================================
+ * 无限网格地面（Shader 实现，均匀间距，随相机延伸、远处柔和淡出）
+ * ============================================================ */
+const gridUniforms = {
+  uColor:      { value: new THREE.Color('#7aa8ff') },
+  uOpacity:    { value: 0.85 },
+  uSize:       { value: 1.0 },   // 网格间距
+  uFade:       { value: 400 },   // 延伸淡出距离（以相机为基准）
+  uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+  uCamPos:     { value: new THREE.Vector2(0, 0) }, // 相机 XZ 位置
+};
+
+const gridMat = new THREE.ShaderMaterial({
+  transparent: true,
+  depthTest: false,
+  depthWrite: false,
+  uniforms: gridUniforms,
+  vertexShader: /* glsl */`
+    varying vec3 vWorldPos;
+    void main(){
+      vec4 wp = modelMatrix * vec4(position, 1.0);
+      vWorldPos = wp.xyz;
+      gl_Position = projectionMatrix * viewMatrix * wp;
+    }`,
+  fragmentShader: /* glsl */`
+    precision highp float;
+    varying vec3 vWorldPos;
+    uniform vec3  uColor;
+    uniform float uOpacity;
+    uniform float uSize;
+    uniform float uFade;
+    uniform float uPixelRatio;
+    uniform vec2  uCamPos;
+
+    // 返回 0~1 的线条强度：1 = 线中心，0 = 两线之间
+    float gridLine(vec2 coord, vec2 deriv){
+      vec2 g = abs(fract(coord - 0.5) - 0.5) / deriv;
+      return 1.0 - min(min(g.x, g.y), 1.0);
+    }
+
+    void main(){
+      vec2 world = vWorldPos.xz;
+      vec2 deriv = fwidth(world) * uPixelRatio;
+
+      // 单一间距的均匀网格：远近间距一致，靠透视自然汇聚到远方
+      float line = gridLine(world / uSize, deriv / uSize);
+
+      // 距离以相机为基准，远处柔和淡出（像地平线雾化，实现"无尽"观感）
+      vec2 rel = world - uCamPos;
+      float dist = length(rel);
+      float fade = 1.0 - smoothstep(0.7, 1.0, dist / uFade);
+
+      float alpha = line * fade;
+      alpha = clamp(alpha, 0.0, 1.0);
+
+      gl_FragColor = vec4(uColor, alpha * uOpacity);
+    }`,
+});
+
+const gridPlane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), gridMat);
+gridPlane.rotation.x = -Math.PI / 2;          // 平铺在 XZ 平面
+gridPlane.scale.set(8000, 8000, 1);           // 超大覆盖范围（配合大淡出距离实现无尽延伸）
+gridPlane.visible = true;
+scene.add(gridPlane);
+
+/* ============================================================
+ * 参考物体（坐标轴，默认隐藏）
+ * ============================================================ */
+const refGroup = new THREE.Group();
+{
+  const axes = new THREE.AxesHelper(3);
+  refGroup.add(axes);
+}
+refGroup.visible = false;
+scene.add(refGroup);
+
+/* ============================================================
+ * 地板贴图（导入 PNG，可调位置/大小/旋转/不透明度）
+ * ============================================================ */
+const floorImages = [];   // {id, name, url, group, mat, size, rot, opacity}
+let imgSeq = 0;
+
+function addFloorImage(file){
+  const id = ++imgSeq;
+  const url = URL.createObjectURL(file);
+  const tex = new THREE.TextureLoader().load(url, () => {
+    tex.colorSpace = THREE.SRGBColorSpace;   // PNG 颜色正确显示
+    const img = tex.image;
+    const aspect = img.width / img.height;
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex, transparent: true,
+      depthTest: false, depthWrite: false,   // 始终显示在网格上方
+    });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(aspect, 1), mat);
+    mesh.rotation.x = -Math.PI / 2;          // 平铺在地面
+    const group = new THREE.Group();
+    group.add(mesh);
+    group.position.set(0, 0.02, 0);
+    group.rotation.y = 0;
+    group.scale.setScalar(3);                // 默认大小 3（短边方向）
+    group.renderOrder = 10 + id;             // 后导入的叠在上层
+    scene.add(group);
+    floorImages.push({ id, name: file.name, url, group, mat, size: 3, rot: 0, opacity: 1 });
+    renderImgList();
+  }, undefined, () => { URL.revokeObjectURL(url); });
+}
+
+function renderImgList(){
+  const box = $('imgList');
+  box.innerHTML = '';
+  if(floorImages.length === 0){
+    box.innerHTML = '<p class="hint">尚未导入贴图。</p>';
+    return;
+  }
+  floorImages.forEach((im, idx) => {
+    const card = document.createElement('div');
+    card.className = 'kfCard';
+    card.innerHTML = `
+      <div class="kfTitle"><span>贴图 ${idx+1} <span style="font-size:10px;color:var(--text-dim)">${im.name}</span></span>
+        <button class="btn small" data-act="del" style="color:#ff7a7a">删除</button></div>
+      <div class="row"><label>X 位置</label><input type="range" data-p="x" min="-100" max="100" step="0.5" value="${im.group.position.x.toFixed(1)}"><span class="val" data-v="x">${im.group.position.x.toFixed(1)}</span></div>
+      <div class="row"><label>Z 位置</label><input type="range" data-p="z" min="-100" max="100" step="0.5" value="${im.group.position.z.toFixed(1)}"><span class="val" data-v="z">${im.group.position.z.toFixed(1)}</span></div>
+      <div class="row"><label>大小</label><input type="range" data-p="size" min="0.2" max="50" step="0.2" value="${im.size.toFixed(1)}"><span class="val" data-v="size">${im.size.toFixed(1)}</span></div>
+      <div class="row"><label>旋转°</label><input type="range" data-p="rot" min="-180" max="180" step="1" value="${im.rot}"><span class="val" data-v="rot">${im.rot}°</span></div>
+      <div class="row"><label>不透明度</label><input type="range" data-p="opacity" min="0" max="1" step="0.01" value="${im.opacity.toFixed(2)}"><span class="val" data-v="opacity">${im.opacity.toFixed(2)}</span></div>`;
+    card.querySelectorAll('input[data-p]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const p = inp.dataset.p, v = parseFloat(inp.value);
+        const span = card.querySelector(`[data-v="${p}"]`);
+        if(p === 'x'){ im.group.position.x = v; span.textContent = v.toFixed(1); }
+        else if(p === 'z'){ im.group.position.z = v; span.textContent = v.toFixed(1); }
+        else if(p === 'size'){ im.size = v; im.group.scale.setScalar(v); span.textContent = v.toFixed(1); }
+        else if(p === 'rot'){ im.rot = v; im.group.rotation.y = v * Math.PI / 180; span.textContent = v + '°'; }
+        else if(p === 'opacity'){ im.opacity = v; im.mat.opacity = v; span.textContent = v.toFixed(2); }
+      });
+    });
+    card.querySelector('[data-act=del]').addEventListener('click', () => {
+      scene.remove(im.group);
+      im.mat.map.dispose(); im.mat.dispose();
+      im.group.children[0].geometry.dispose();
+      URL.revokeObjectURL(im.url);
+      floorImages.splice(idx, 1);
+      renderImgList();
+    });
+    box.appendChild(card);
+  });
+}
+
+$('btnImportImg').addEventListener('click', () => $('imgFile').click());
+$('imgFile').addEventListener('change', e => {
+  const files = [...e.target.files];
+  files.forEach(f => addFloorImage(f));
+  e.target.value = '';
+});
+
+/* ============================================================
+ * UI 绑定：网格外观
+ * ============================================================ */
+const bindSlider = (id, valId, fmt, fn) => {
+  const el = $(id), val = $(valId);
+  el.addEventListener('input', () => {
+    val.textContent = fmt(el.value);
+    fn(parseFloat(el.value));
+  });
+};
+$('gridColor').addEventListener('input', e => {
+  $('gridColorVal').textContent = e.target.value;
+  gridUniforms.uColor.value.set(e.target.value);
+});
+bindSlider('gridOpacity', 'gridOpacityVal', v => v, v => gridUniforms.uOpacity.value = v);
+bindSlider('gridFine', 'gridFineVal', v => (+v).toFixed(1), v => gridUniforms.uSize.value = v);
+bindSlider('gridFade', 'gridFadeVal', v => v, v => gridUniforms.uFade.value = v);
+$('gridOn').addEventListener('change', e => gridPlane.visible = e.target.checked);
+$('refOn').addEventListener('change', e => refGroup.visible = e.target.checked);
+
+/* ============================================================
+ * UI 绑定：标签页
+ * ============================================================ */
+const pages = ['grid', 'camera', 'motion', 'img', 'export'];
+document.querySelectorAll('#tabs button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#tabs button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    pages.forEach(p => $('tab-' + p).style.display = (p === btn.dataset.tab) ? '' : 'none');
+  });
+});
+
+/* ============================================================
+ * UI 绑定：相机
+ * ============================================================ */
+bindSlider('camFov', 'camFovVal', v => v + '°', v => {
+  camera.fov = v; camera.updateProjectionMatrix();
+});
+
+function fmtVec(v){ return `位置 (${v.x.toFixed(2)}, ${v.y.toFixed(2)}, ${v.z.toFixed(2)})`; }
+function fmtKF(kf){
+  if(!kf) return '未设置';
+  const p = kf.pos, q = kf.quat;
+  const e = new THREE.Euler().setFromQuaternion(q);
+  return `位置 (${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})\n角度 (${(e.x*180/Math.PI).toFixed(0)}°, ${(e.y*180/Math.PI).toFixed(0)}°, ${(e.z*180/Math.PI).toFixed(0)}°)`;
+}
+function captureKF(){
+  return { pos: camera.position.clone(), quat: camera.quaternion.clone() };
+}
+function updateKFText(){
+  $('kfAText').textContent = fmtKF(state.kfA);
+  $('kfBText').textContent = fmtKF(state.kfB);
+  $('exportName').textContent = (state.kfA && state.kfB)
+    ? exportBase() + '.' + fmtExt()
+    : `${exportBase()}(未设首尾帧).${fmtExt()}`;
+}
+$('btnSetA').addEventListener('click', () => { state.kfA = captureKF(); updateKFText(); rebuildPath(); });
+$('btnSetB').addEventListener('click', () => { state.kfB = captureKF(); updateKFText(); rebuildPath(); });
+$('btnSwapKF').addEventListener('click', () => {
+  [state.kfA, state.kfB] = [state.kfB, state.kfA];
+  updateKFText();
+  rebuildPath();
+});
+$('btnResetView').addEventListener('click', () => {
+  camera.position.set(9, 6, 9);
+  controls.lookAt(0, 0, 0);
+  controls.update();
+});
+$('btnTopView').addEventListener('click', () => {
+  camera.position.set(0, 14, 0.001);
+  controls.lookAt(0, 0, 0);
+  controls.update();
+});
+
+/* 默认首尾帧 */
+state.kfA = { pos: new THREE.Vector3(9, 6, 9),    quat: new THREE.Quaternion() };
+state.kfB = { pos: new THREE.Vector3(-10, 7, -6), quat: new THREE.Quaternion() };
+(function computeDefaultQuats(){
+  const look = (from, to) => {
+    const c = new THREE.PerspectiveCamera();
+    c.position.copy(from);
+    c.lookAt(to);
+    return c.quaternion.clone();
+  };
+  state.kfA.quat = look(state.kfA.pos, new THREE.Vector3(0, 0, 0));
+  state.kfB.quat = look(state.kfB.pos, new THREE.Vector3(0, 0, 0));
+})();
+updateKFText();
+
+/* ============================================================
+ * 补间锚点 + 相机路径（Catmull-Rom 平滑曲线，弧长参数化）
+ * ============================================================ */
+const pathLine = new THREE.Line(
+  new THREE.BufferGeometry(),
+  new THREE.LineBasicMaterial({ color: 0xffb648, transparent: true, opacity: 0.85, depthTest: false })
+);
+pathLine.visible = false;
+scene.add(pathLine);
+
+let pathSamples = [];   // [{pos, quat}] 路径采样点
+let pathCum = [0];      // 累计弧长
+let pathTotal = 1;
+
+function catmull(p0, p1, p2, p3, t){
+  const t2 = t * t, t3 = t2 * t;
+  return new THREE.Vector3(
+    0.5 * (2*p1.x + (-p0.x + p2.x)*t + (2*p0.x - 5*p1.x + 4*p2.x - p3.x)*t2 + (-p0.x + 3*p1.x - 3*p2.x + p3.x)*t3),
+    0.5 * (2*p1.y + (-p0.y + p2.y)*t + (2*p0.y - 5*p1.y + 4*p2.y - p3.y)*t2 + (-p0.y + 3*p1.y - 3*p2.y + p3.y)*t3),
+    0.5 * (2*p1.z + (-p0.z + p2.z)*t + (2*p0.z - 5*p1.z + 4*p2.z - p3.z)*t2 + (-p0.z + 3*p1.z - 3*p2.z + p3.z)*t3)
+  );
+}
+
+function rebuildPath(){
+  const keys = [state.kfA, ...state.anchors, state.kfB].filter(Boolean);
+  if(keys.length < 2){ pathSamples = []; pathCum = [0]; pathTotal = 1; updatePathLine(); return; }
+  const segRes = 80;   // 采样加密：位置与旋转插值更平滑、更接近匀速
+  pathSamples = [];
+  for(let i = 0; i < keys.length - 1; i++){
+    const p0 = keys[Math.max(0, i-1)].pos;
+    const p1 = keys[i].pos;
+    const p2 = keys[i+1].pos;
+    const p3 = keys[Math.min(keys.length-1, i+2)].pos;
+    const q1 = keys[i].quat, q2 = keys[i+1].quat;
+    for(let j = 0; j < segRes; j++){
+      const t = j / segRes;
+      pathSamples.push({ pos: catmull(p0, p1, p2, p3, t), quat: q1.clone().slerp(q2, t) });
+    }
+  }
+  const last = keys[keys.length-1];
+  pathSamples.push({ pos: last.pos.clone(), quat: last.quat.clone() });
+  pathCum = [0];
+  for(let i = 1; i < pathSamples.length; i++){
+    pathCum.push(pathCum[i-1] + pathSamples[i].pos.distanceTo(pathSamples[i-1].pos));
+  }
+  pathTotal = pathCum[pathCum.length-1] || 1;
+  updatePathLine();
+}
+
+function samplePath(s){
+  if(pathSamples.length < 2) return null;
+  const target = s * pathTotal;
+  let lo = 0, hi = pathCum.length - 1;
+  while(lo < hi - 1){ const mid = (lo + hi) >> 1; if(pathCum[mid] <= target) lo = mid; else hi = mid; }
+  const span = pathCum[hi] - pathCum[lo];
+  const f = span > 0 ? (target - pathCum[lo]) / span : 0;
+  return {
+    pos: pathSamples[lo].pos.clone().lerp(pathSamples[hi].pos, f),
+    quat: pathSamples[lo].quat.clone().slerp(pathSamples[hi].quat, f),
+  };
+}
+
+function updatePathLine(){
+  const pts = pathSamples.map(p => p.pos);
+  const g = new THREE.BufferGeometry().setFromPoints(pts);
+  pathLine.geometry.dispose();
+  pathLine.geometry = g;
+  pathLine.visible = $('showPath').checked && pts.length > 1;
+}
+
+/* 锚点列表 UI */
+function renderAnchors(){
+  const box = $('anchorList');
+  box.innerHTML = '';
+  state.anchors.forEach((a, i) => {
+    const card = document.createElement('div');
+    card.className = 'kfCard';
+    card.innerHTML = `
+      <div class="kfTitle"><span>锚点 ${i+1} <span class="badge A">●</span></span>
+        <span>
+          <button class="btn small" data-act="update">更新为当前视角</button>
+          <button class="btn small" data-act="del" style="color:#ff7a7a">删除</button>
+        </span>
+      </div>
+      <div class="kfCoords">位置 (${a.pos.x.toFixed(2)}, ${a.pos.y.toFixed(2)}, ${a.pos.z.toFixed(2)})</div>`;
+    card.querySelector('[data-act=update]').addEventListener('click', () => {
+      state.anchors[i] = captureKF();
+      renderAnchors(); rebuildPath();
+    });
+    card.querySelector('[data-act=del]').addEventListener('click', () => {
+      state.anchors.splice(i, 1);
+      renderAnchors(); rebuildPath();
+    });
+    box.appendChild(card);
+  });
+}
+$('btnAddAnchor').addEventListener('click', () => {
+  state.anchors.push(captureKF());
+  renderAnchors(); rebuildPath();
+});
+$('showPath').addEventListener('change', () => updatePathLine());
+
+/* 初始路径 */
+rebuildPath();
+
+/* ============================================================
+ * s-t 曲线编辑器
+ * ============================================================ */
+const cvs = $('curveCanvas');
+const ctx = cvs.getContext('2d');
+const M = 26;                       // 边距
+const W = cvs.width, H = cvs.height;
+const CW = W - 2 * M, CH = H - 2 * M;
+
+let curvePoints = [ {t:0, s:0}, {t:1, s:1} ]; // 按 t 升序
+let dragIdx = -1;
+let curveMarker = null;             // {t,s} 播放标记
+let curveSmooth = true;             // 平滑曲线（单调三次插值）开关
+
+function toCanvas(p){ return { x: M + p.t * CW, y: H - M - p.s * CH }; }
+function toData(x, y){ return { t: Math.min(1, Math.max(0, (x - M) / CW)), s: Math.min(1, Math.max(0, (H - M - y) / CH)) }; }
+
+/* 平滑模式：Fritsch–Carlson 单调三次插值（过所有控制点、速度连续、保持单调） */
+function computeTangents(){
+  const n = curvePoints.length;
+  const m = new Array(n);
+  if(n <= 1) return m;
+  const d = [];
+  for(let i = 0; i < n - 1; i++){
+    const dt = curvePoints[i+1].t - curvePoints[i].t;
+    d.push((curvePoints[i+1].s - curvePoints[i].s) / (dt > 0 ? dt : 1e-9));
+  }
+  m[0] = d[0];
+  for(let i = 1; i < n - 1; i++){
+    if(d[i-1] * d[i] <= 0) m[i] = 0;                    // 单调性反转处斜率归零
+    else m[i] = 2 / (1/d[i-1] + 1/d[i]);                // 调和平均
+  }
+  m[n-1] = d[n-2];
+  return m;
+}
+
+function sampleCurve(t){
+  if(curvePoints.length === 0) return t;
+  if(t <= curvePoints[0].t) return curvePoints[0].s;
+  for(let i = 1; i < curvePoints.length; i++){
+    if(t <= curvePoints[i].t){
+      const a = curvePoints[i-1], b = curvePoints[i];
+      const span = b.t - a.t;
+      const f = span === 0 ? 0 : (t - a.t) / span;
+      if(!curveSmooth) return a.s + (b.s - a.s) * f;    // 折线模式
+      // 平滑模式：三次 Hermite
+      const tang = computeTangents();
+      const m0 = tang[i-1], m1 = tang[i];
+      const f2 = f * f, f3 = f2 * f;
+      return a.s * (2*f3 - 3*f2 + 1)
+           + b.s * (-2*f3 + 3*f2)
+           + m0 * span * (f3 - 2*f2 + f)
+           + m1 * span * (f3 - f2);
+    }
+  }
+  return curvePoints[curvePoints.length-1].s;
+}
+
+function drawCurve(){
+  ctx.clearRect(0, 0, W, H);
+  // 背景
+  ctx.fillStyle = '#111318';
+  ctx.fillRect(0, 0, W, H);
+  // 坐标网格（10×10 细分）
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 1;
+  for(let i = 0; i <= 10; i++){
+    const x = M + i * CW / 10, y = M + i * CH / 10;
+    ctx.beginPath(); ctx.moveTo(x, M); ctx.lineTo(x, H - M); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(M, y); ctx.lineTo(W - M, y); ctx.stroke();
+  }
+  // 坐标轴
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.beginPath(); ctx.moveTo(M, M); ctx.lineTo(M, H - M); ctx.lineTo(W - M, H - M); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.font = '11px Consolas,monospace';
+  ctx.fillText('t=0', M + 4, H - M + 14);
+  ctx.fillText('t=1', W - M - 22, H - M + 14);
+  ctx.fillText('s=1', M + 4, M + 4);
+  // 参考线：匀速
+  ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+  ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(M, H - M); ctx.lineTo(W - M, M); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 曲线本体（密集采样绘制）
+  ctx.strokeStyle = '#4da3ff';
+  ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  for(let i = 0; i <= 200; i++){
+    const t = i / 200;
+    const p = toCanvas({ t, s: sampleCurve(t) });
+    if(i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+  }
+  ctx.stroke();
+
+  // 控制点
+  curvePoints.forEach((p, idx) => {
+    const c = toCanvas(p);
+    const isEnd = (idx === 0 || idx === curvePoints.length - 1);
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, isEnd ? 5.5 : 4.5, 0, Math.PI * 2);
+    ctx.fillStyle = isEnd ? '#ffb648' : '#ffffff';
+    ctx.fill();
+    ctx.strokeStyle = '#0b0d10';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  });
+
+  // 播放标记
+  if(curveMarker){
+    const c = toCanvas(curveMarker);
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 8, 0, Math.PI * 2);
+    ctx.strokeStyle = '#5fd35f';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#5fd35f';
+    ctx.fill();
+  }
+
+  // 速度状态文本
+  const v0 = slopeAt(0), v1 = slopeAt(1);
+  let desc;
+  if(curvePoints.length === 2 && Math.abs(v0 - 1) < 0.01) desc = '匀速直线';
+  else if(v0 < v1) desc = '先慢后快（加速）';
+  else if(v0 > v1) desc = '先快后慢（减速）';
+  else desc = '先快后慢再快';
+  $('curveStatus').innerHTML = `当前曲线：<b>${desc}</b> &nbsp;·&nbsp; 起点斜率 ${v0.toFixed(2)} · 终点斜率 ${v1.toFixed(2)}`;
+}
+function slopeAt(t){
+  // 取 t 处小邻域斜率（速度）
+  const h = 0.001;
+  return (sampleCurve(Math.min(1, t + h)) - sampleCurve(Math.max(0, t - h))) / (2 * h);
+}
+
+/* 鼠标交互 */
+function hitTest(x, y){
+  let best = -1, bestD = 12;
+  curvePoints.forEach((p, i) => {
+    const c = toCanvas(p);
+    const d = Math.hypot(c.x - x, c.y - y);
+    if(d < bestD){ bestD = d; best = i; }
+  });
+  return best;
+}
+cvs.addEventListener('mousedown', e => {
+  const r = cvs.getBoundingClientRect();
+  const x = (e.clientX - r.left) * (W / r.width);
+  const y = (e.clientY - r.top) * (H / r.height);
+  const hit = hitTest(x, y);
+  if(hit >= 0){ dragIdx = hit; }
+  else {
+    const d = toData(x, y);
+    if(d.t > 0.01 && d.t < 0.99){
+      curvePoints.push({ t: d.t, s: d.s });
+      curvePoints.sort((a, b) => a.t - b.t);
+      drawCurve();
+    }
+  }
+});
+window.addEventListener('mousemove', e => {
+  if(dragIdx < 0) return;
+  const r = cvs.getBoundingClientRect();
+  const x = (e.clientX - r.left) * (W / r.width);
+  const y = (e.clientY - r.top) * (H / r.height);
+  const d = toData(x, y);
+  const isEnd = (dragIdx === 0 || dragIdx === curvePoints.length - 1);
+  if(isEnd){ // 首尾点只能上下移动（保持 t=0 / t=1）
+    if(dragIdx === 0) curvePoints[0] = { t: 0, s: d.s };
+    else curvePoints[curvePoints.length - 1] = { t: 1, s: d.s };
+  } else {
+    // 防止越过相邻点
+    const prev = curvePoints[dragIdx - 1], next = curvePoints[dragIdx + 1];
+    const t = Math.min(next.t - 0.001, Math.max(prev.t + 0.001, d.t));
+    curvePoints[dragIdx] = { t, s: d.s };
+  }
+  drawCurve();
+});
+window.addEventListener('mouseup', () => dragIdx = -1);
+cvs.addEventListener('dblclick', e => {
+  const r = cvs.getBoundingClientRect();
+  const x = (e.clientX - r.left) * (W / r.width);
+  const y = (e.clientY - r.top) * (H / r.height);
+  const hit = hitTest(x, y);
+  if(hit > 0 && hit < curvePoints.length - 1){
+    curvePoints.splice(hit, 1);
+    drawCurve();
+  }
+});
+$('btnResetCurve').addEventListener('click', () => {
+  curvePoints = [{t:0,s:0},{t:1,s:1}];
+  drawCurve();
+});
+$('curveSmooth').addEventListener('change', e => { curveSmooth = e.target.checked; drawCurve(); });
+
+/* ============================================================
+ * 动画驱动
+ * ============================================================ */
+function getDuration(){ return parseFloat($('animDuration').value); }
+bindSlider('animDuration', 'animDurationVal', v => (+v).toFixed(1) + 's', () => {});
+/* 「动画」页与「导出」页时长滑杆双向联动 */
+{
+  const d1 = $('animDuration'), d2 = $('animDuration2');
+  d1.addEventListener('input', () => { d2.value = d1.value; $('animDurationVal2').textContent = (+d1.value).toFixed(1) + 's'; });
+  d2.addEventListener('input', () => {
+    d1.value = d2.value;
+    $('animDurationVal').textContent = (+d2.value).toFixed(1) + 's';
+    $('animDurationVal2').textContent = (+d2.value).toFixed(1) + 's';
+  });
+}
+
+function driveCamera(t){
+  // t ∈ [0,1] 归一化时间；s = 路径进度（s-t 曲线决定运动速率）
+  if(state.kfA && state.kfB){
+    const s = sampleCurve(t);
+    const p = samplePath(s);
+    if(p){
+      camera.position.copy(p.pos);
+      camera.quaternion.copy(p.quat);
+      controls.syncFromCamera();   // 同步 FPS 角度状态，防止 controls.update() 覆盖补间旋转
+    }
+  }
+}
+function stopMotion(){
+  state.playing = false;
+  state.animTime = 0;
+  curveMarker = null;
+  $('playBadge').style.display = 'none';
+}
+$('btnPlay').addEventListener('click', () => {
+  if(mode === 'flame'){ alert('火焰特效为实时粒子动画，无需播放；可直接用「导出」页录制。'); return; }
+  if(!state.kfA || !state.kfB){ alert('请先在「相机」页设置首尾帧 A 和 B。'); return; }
+  if(state.recording) return;
+  stopMotion();
+  state.playing = true;
+  $('playBadge').style.display = 'block';
+  controls.enabled = false;
+});
+$('btnStop').addEventListener('click', () => {
+  if(state.recording) return;
+  stopMotion();
+  controls.enabled = true;
+  if(state.kfA) { camera.position.copy(state.kfA.pos); camera.quaternion.copy(state.kfA.quat); controls.syncFromCamera(); }
+});
+
+/* ============================================================
+ * 背景控制
+ * ============================================================ */
+function applyBg(){
+  if(state.bgMode === 'transparent'){
+    scene.background = null;
+    if(typeof flameScene !== 'undefined') flameScene.background = null;
+    if(typeof lightningScene !== 'undefined') lightningScene.background = null;
+    renderer.setClearColor(0x000000, 0);
+  } else {
+    scene.background = new THREE.Color(state.bgColor);
+    if(typeof flameScene !== 'undefined') flameScene.background = new THREE.Color(state.bgColor);
+    if(typeof lightningScene !== 'undefined') lightningScene.background = new THREE.Color(state.bgColor);
+    renderer.setClearColor(new THREE.Color(state.bgColor), 1);
+  }
+}
+$('bgMode').addEventListener('change', e => {
+  state.bgMode = e.target.value;
+  $('bgColorRow').style.display = state.bgMode === 'color' ? '' : 'none';
+  applyBg();
+});
+$('bgColor').addEventListener('input', e => {
+  state.bgColor = e.target.value;
+  $('bgColorVal').textContent = e.target.value;
+  if(state.bgMode === 'color') applyBg();
+});
+
+/* ============================================================
+ * 火焰特效（模式切换：工具 / 火焰）
+ * ============================================================ */
+const flameScene = new THREE.Scene();
+flameScene.background = null;
+flameScene.visible = false;
+
+/* 暗色地面（默认隐藏，保持画面干净） */
+const flameFloor = new THREE.Mesh(
+  new THREE.CircleGeometry(30, 48),
+  new THREE.MeshBasicMaterial({ color: 0x14161a, side: THREE.DoubleSide })
+);
+flameFloor.rotation.x = -Math.PI / 2;
+flameFloor.visible = false;
+flameScene.add(flameFloor);
+
+/* 粒子着色器（火焰与火星共用；絮状噪声边缘 + 内部亮芯，避免廉价圆点观感） */
+const ptVS = `
+  attribute float aSize;
+  attribute float aAlpha;
+  attribute vec3  aColor;
+  varying float vAlpha;
+  varying vec3  vColor;
+  void main(){
+    vColor = aColor;
+    vAlpha = aAlpha;
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    gl_PointSize = aSize * (120.0 / max(0.1, -mv.z));
+    gl_Position = projectionMatrix * mv;
+  }`;
+const ptFS = `
+  precision highp float;
+  varying float vAlpha;
+  varying vec3  vColor;
+  uniform float uTime;
+  float hash(vec2 p){
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+  }
+  float noise(vec2 p){
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
+               mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+  }
+  void main(){
+    vec2 uv = gl_PointCoord - 0.5;
+    float ang = atan(uv.y, uv.x);
+    float rad = length(uv);
+    // 用噪声扰动粒子轮廓，形成不规则絮状边缘（随时间缓慢变化）
+    float n = noise(vec2(rad * 6.0 + uTime * 0.5, ang * 2.0 + uTime * 0.3));
+    float r2 = rad * (1.0 + (n - 0.5) * 0.55);
+    float core = 1.0 - smoothstep(0.0, 0.22, r2);      // 内部亮芯
+    float edge = 1.0 - smoothstep(0.22, 0.5, r2);      // 絮状外缘
+    float a = (core * 0.55 + edge * 0.45) * vAlpha;
+    if(a < 0.004) discard;
+    // 亮芯更白亮，边缘保持原色
+    vec3 col = vColor * (0.72 + 0.6 * core) + vec3(0.28, 0.2, 0.06) * core * core;
+    gl_FragColor = vec4(col, a);
+  }`;
+
+/* 火焰主体：billboard 体积火焰着色器（片元级密度场，连续一体、点源水滴形火苗，无颗粒） */
+let flameTime = 0;
+let flameHVal = 6;
+/* 3D 体积火焰：立方体包围 + ray marching 3D 密度场（点源水滴形、内部翻卷纹理、真 3D 体积、无颗粒） */
+/* 火焰主体：火源向不同方向、不同初速度发射噪声不规则粒子（非圆形絮团），大量叠加成火焰 */
+let flamePartState = { count: 2500, size: 0.9, vel: 2.2, life: 1.1, lifeVar: 0.25, bright: 1.0, density: 1.0, jitter: 0.55, colors: [
+  { r: 1.0, g: 0.98, b: 0.90 },   // 焰心
+  { r: 1.0, g: 0.86, b: 0.45 },   // 第二
+  { r: 1.0, g: 0.55, b: 0.16 },   // 第三
+  { r: 0.80, g: 0.25, b: 0.06 }   // 外焰
+], dirX: 0, dirZ: 0, dirVar: 0.3, dirJitter: 1.0 };
+let flamePts = null;
+const flamePState = {};
+
+const flamePShapeVS = `
+  attribute float aSize;
+  attribute float aAlpha;
+  attribute float aSeed;
+  attribute vec3  aColor;
+  varying float vAlpha;
+  varying float vSeed;
+  varying vec3  vColor;
+  void main(){
+    vColor = aColor; vAlpha = aAlpha; vSeed = aSeed;
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    gl_PointSize = aSize * (150.0 / max(0.1, -mv.z));
+    gl_Position = projectionMatrix * mv;
+  }`;
+const flamePShapeFS = `
+  precision highp float;
+  varying float vAlpha;
+  varying float vSeed;
+  varying vec3  vColor;
+  uniform float uTime;
+  uniform float uJitter;
+  float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+  float noise(vec2 p){
+    vec2 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(hash(i), hash(i+vec2(1.0,0.0)), f.x) * (1.0 - f.y)
+         + mix(hash(i+vec2(0.0,1.0)), hash(i+vec2(1.0,1.0)), f.x) * f.y;
+  }
+  void main(){
+    vec2 uv = gl_PointCoord - 0.5;
+    float t = uTime * 1.5 + vSeed * 100.0;
+    // 粒子自身旋转（旋转速度随机 + 随机相位）
+    float rot = uTime * (0.5 + vSeed * 3.0) + vSeed * 6.28318;
+    vec2 ru = vec2(uv.x * cos(rot) - uv.y * sin(rot), uv.x * sin(rot) + uv.y * cos(rot));
+    // 噪声扰动：不规则絮团（非圆），随时间蠕动；uJitter 控制扰动强度
+    vec2 q = ru + (vec2(noise(ru * 3.0 + t), noise(ru * 3.0 + t + 7.0)) - 0.5) * uJitter;
+    float d = length(q);
+    float a = 1.0 - smoothstep(0.10, 0.5, d + (noise(ru * 6.0 + t * 1.3) - 0.5) * 0.3);
+    a *= vAlpha;
+    if(a < 0.004) discard;
+    // 亮芯：中心更亮
+    vec3 col = vColor * (0.65 + 0.55 * (1.0 - clamp(d * 2.0, 0.0, 1.0)));
+    gl_FragColor = vec4(col, a);
+  }`;
+
+function initFlameParticle(i, anyAge){
+  // 喷射主方向：默认竖直向上，可向 X/Z 倾斜；并随时间晃动（用动画时间 flameTime，与导出帧率一致）
+  const tNow = flameTime;
+  const dj = flamePartState.dirJitter;
+  let mx = flamePartState.dirX + Math.sin(tNow * 1.3 * dj) * flamePartState.dirVar * 0.5;
+  let mz = flamePartState.dirZ + Math.cos(tNow * 1.1 * dj) * flamePartState.dirVar * 0.5;
+  let my = 1.0;
+  const dl = Math.sqrt(mx*mx + my*my + mz*mz) || 1; mx/=dl; my/=dl; mz/=dl;
+  // 正交基，绕主方向作锥角散布（喷射方向变化范围）
+  let ux = 0, uy = 1, uz = 0;
+  if(Math.abs(my) > 0.95){ ux = 1; uy = 0; }
+  let ucx = my*uz - mz*uy, ucy = mz*ux - mx*uz, ucz = mx*uy - my*ux;
+  const ul = Math.sqrt(ucx*ucx + ucy*ucy + ucz*ucz) || 1; ucx/=ul; ucy/=ul; ucz/=ul;
+  const vx = my*ucz - mz*ucy, vy = mz*ucx - mx*ucz, vz = mx*ucy - my*ucx;
+  const a = Math.random() * Math.PI * 2;
+  const off = flamePartState.dirVar * Math.PI * 0.5 * (0.2 + Math.random() * 0.8);  // 散布角
+  const to = Math.tan(off);
+  const tx = mx + (ucx*Math.cos(a) + vx*Math.sin(a)) * to;
+  const ty = my + (ucy*Math.cos(a) + vy*Math.sin(a)) * to;
+  const tz = mz + (ucz*Math.cos(a) + vz*Math.sin(a)) * to;
+  const tl = Math.sqrt(tx*tx + ty*ty + tz*tz) || 1;
+  const spd = flamePartState.vel * (0.4 + Math.random() * 0.8);      // 初速度随机
+  flamePState.vel[i*3]   = tx / tl * spd;
+  flamePState.vel[i*3+1] = ty / tl * spd;
+  flamePState.vel[i*3+2] = tz / tl * spd;
+  flamePState.pos[i*3]   = 0;   // 自火源点发射
+  flamePState.pos[i*3+1] = 0;
+  flamePState.pos[i*3+2] = 0;
+  flamePState.life[i] = anyAge ? Math.random() * flamePartState.life : 0;
+  flamePState.seed[i] = Math.random();
+  // 随机浮动：大小 / 寿命各不相同（寿命浮动幅度可调）
+  flamePState.sizeK[i] = 0.7 + Math.random() * 0.6;    // 0.7~1.3
+  flamePState.lifeK[i] = (1 - flamePartState.lifeVar) + Math.random() * 2 * flamePartState.lifeVar;   // 寿命浮动
+  flamePState.rotK[i]  = 0.5 + Math.random() * 1.5;    // 旋转速度随机
+}
+function buildFlameParticles(){
+  const n = Math.max(0, flamePartState.count | 0);
+  flamePState.pos = new Float32Array(n * 3);
+  flamePState.vel = new Float32Array(n * 3);
+  flamePState.life = new Float32Array(n);
+  flamePState.seed = new Float32Array(n);
+  flamePState.sizeK = new Float32Array(n);
+  flamePState.lifeK = new Float32Array(n);
+  flamePState.rotK = new Float32Array(n);
+  for(let i = 0; i < n; i++) initFlameParticle(i, true);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(flamePState.pos, 3));
+  geo.setAttribute('aColor',   new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  geo.setAttribute('aSize',    new THREE.BufferAttribute(new Float32Array(n), 1));
+  geo.setAttribute('aAlpha',   new THREE.BufferAttribute(new Float32Array(n), 1));
+  geo.setAttribute('aSeed',    new THREE.BufferAttribute(flamePState.seed, 1));
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: flamePShapeVS,
+    fragmentShader: flamePShapeFS,
+    uniforms: { uTime: { value: 0 }, uJitter: { value: 0.55 } },
+    transparent: true,
+    depthWrite: false,
+  });
+  const pts = new THREE.Points(geo, mat);
+  pts.frustumCulled = false;
+  pts.renderOrder = 1000;
+  flameScene.add(pts);
+  flamePts = { pts, geo, n, mat };
+  flamePts.aPos = geo.attributes.position;
+  flamePts.aCol = geo.attributes.aColor;
+  flamePts.aSiz = geo.attributes.aSize;
+  flamePts.aAlp = geo.attributes.aAlpha;
+}
+function rebuildFlameParticles(){
+  if(flamePts){
+    flameScene.remove(flamePts.pts);
+    flamePts.geo.dispose();
+    flamePts.pts.material.dispose();
+    flamePts = null;
+  }
+  if(flamePartState.count > 0) buildFlameParticles();
+}
+buildFlameParticles();
+
+function updateFlameParticles(dt){
+  if(!flamePts) return;
+  flamePts.pts.material.uniforms.uTime.value = flameTime;
+  const { n, aPos, aCol, aSiz, aAlp } = flamePts;
+  const pos = aPos.array, col = aCol.array, siz = aSiz.array, alp = aAlp.array;
+  const vel = flamePState.vel;
+  for(let i = 0; i < n; i++){
+    let life = flamePState.life[i] + dt / (flamePartState.life * flamePState.lifeK[i]);   // 寿命浮动
+    if(life >= 1){ initFlameParticle(i, false); life = 0; }
+    flamePState.life[i] = life;
+    const x = pos[i*3], y = pos[i*3+1], z = pos[i*3+2];
+    // 浮力上升 + 阻尼（无环境风；翻滚由喷射方向晃动与散布提供）
+    vel[i*3]   += -vel[i*3]   * 1.2 * dt;
+    vel[i*3+1] += (3.2 * (1.0 - life * 0.5) - vel[i*3+1] * 1.2) * dt;
+    vel[i*3+2] += -vel[i*3+2] * 1.2 * dt;
+    pos[i*3]   += vel[i*3]   * dt;
+    pos[i*3+1] += vel[i*3+1] * dt;
+    pos[i*3+2] += vel[i*3+2] * dt;
+    const fade = Math.max(0.0, 1.0 - life);
+    // 四节点渐变（焰心→外焰）：按 fade 分段插值
+    const cols = flamePartState.colors;
+    const g = 1.0 - fade;                       // 0=焰心, 1=外焰
+    let seg = g * 3.0;
+    let idx = seg > 2.99 ? 3 : Math.floor(seg);
+    let k = seg - idx;
+    const cA = cols[idx], cB = cols[Math.min(3, idx + 1)];
+    col[i*3]   = cA.r + (cB.r - cA.r) * k;
+    col[i*3+1] = cA.g + (cB.g - cA.g) * k;
+    col[i*3+2] = cA.b + (cB.b - cA.b) * k;
+    // 尺寸先增后减；每粒子大小浮动；亮度 bright 控不透明度
+    siz[i] = flamePartState.size * flamePState.sizeK[i] * (0.5 + life * 1.2) * (0.4 + 0.6 * fade);
+    // 缓入衰减：alpha 自 100 缓慢开始下降、保持明亮，临近消失快速归 0（非线性）
+    alp[i] = Math.pow(fade, 0.5) * 0.9 * flamePartState.bright;
+  }
+  aPos.needsUpdate = aCol.needsUpdate = aSiz.needsUpdate = aAlp.needsUpdate = true;
+}
+
+function setFlameHeight(h){
+  // 粒子方案下高度由初速/寿命/升腾自然决定，此处仅作固定视角校准
+  if(mode === 'flame'){
+    controls.lookAt(0, 4, 0);
+    controls.update();
+  }
+}
+/* 扩散性/初速度联动发射锥角（粒子方案无需包围盒） */
+function updateFlameBox(){ /* no-op for particle mode */ }
+
+/* 火星飞溅系统（少量余烬点缀，弹射→受重力下落→渐暗熄灭，动规符合真实火焰） */
+let sparkParam = { count: 60, size: 2.2, vel: 1.0, life: 1.3 };
+let sparkParticles = null;
+const sparkState = {};
+
+function initSpark(i, anyAge){
+  const a = Math.random() * Math.PI * 2, r = Math.random() * 0.2;   // 源半径缩小，火星更集中
+  sparkState.pos[i*3]   = Math.cos(a) * r;
+  sparkState.pos[i*3+1] = 0.1 + Math.random() * 0.25;
+  sparkState.pos[i*3+2] = Math.sin(a) * r;
+  sparkState.vel[i*3]   = (Math.random() - 0.5) * 1.2 * sparkParam.vel;
+  sparkState.vel[i*3+1] = sparkParam.vel * (0.7 + Math.random() * 1.8);
+  sparkState.vel[i*3+2] = (Math.random() - 0.5) * 1.2 * sparkParam.vel;
+  sparkState.life[i] = anyAge ? Math.random() * 1.0 : 0;
+}
+function buildSparks(){
+  const n = Math.max(0, sparkParam.count | 0);
+  const pos = new Float32Array(n * 3);
+  sparkState.pos = pos;
+  sparkState.vel = new Float32Array(n * 3);
+  sparkState.life = new Float32Array(n);
+  for(let i = 0; i < n; i++) initSpark(i, true);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('aColor',   new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  geo.setAttribute('aSize',    new THREE.BufferAttribute(new Float32Array(n), 1));
+  geo.setAttribute('aAlpha',   new THREE.BufferAttribute(new Float32Array(n), 1));
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: ptVS,
+    fragmentShader: ptFS,
+    uniforms: { uTime: { value: 0 } },
+    transparent: true,
+    depthWrite: false,
+  });
+  const pts = new THREE.Points(geo, mat);
+  pts.frustumCulled = false;
+  flameScene.add(pts);
+  sparkParticles = { pts, geo, n };
+  sparkParticles.aPos = geo.attributes.position;
+  sparkParticles.aCol = geo.attributes.aColor;
+  sparkParticles.aSiz = geo.attributes.aSize;
+  sparkParticles.aAlp = geo.attributes.aAlpha;
+}
+function rebuildSparks(){
+  if(sparkParticles){
+    flameScene.remove(sparkParticles.pts);
+    sparkParticles.geo.dispose();
+    sparkParticles.pts.material.dispose();
+    sparkParticles = null;
+  }
+  if(sparkParam.count > 0) buildSparks();
+}
+buildSparks();
+function updateSparks(dt){
+  if(!sparkParticles) return;
+  sparkParticles.pts.material.uniforms.uTime.value = flameTime;   // 用动画时间，与导出帧率一致
+  const { n, aPos, aCol, aSiz, aAlp } = sparkParticles;
+  const pos = sparkState.pos, vel = sparkState.vel;
+  const col = aCol.array, siz = aSiz.array, alp = aAlp.array;
+  for(let i = 0; i < n; i++){
+    let life = sparkState.life[i] + dt / sparkParam.life;
+    if(life >= 1){ initSpark(i, false); life = 0; }
+    sparkState.life[i] = life;
+    vel[i*3+1] -= 2.6 * dt;                            // 重力
+    pos[i*3]   += vel[i*3]   * dt;
+    pos[i*3+1] += vel[i*3+1] * dt;
+    pos[i*3+2] += vel[i*3+2] * dt;
+    if(pos[i*3+1] < 0.02){ pos[i*3+1] = 0.02; vel[i*3+1] = Math.abs(vel[i*3+1]) * 0.2; }
+    const t = life;
+    col[i*3]   = Math.max(0, 1.0 - t * 0.3);
+    col[i*3+1] = Math.max(0, 0.72 - t * 0.5);
+    col[i*3+2] = Math.max(0, 0.30 - t * 0.26);
+    siz[i] = sparkParam.size * (1 - t * 0.5);
+    alp[i] = (1 - t) * 0.85;
+  }
+  aPos.needsUpdate = aCol.needsUpdate = aSiz.needsUpdate = aAlp.needsUpdate = true;
+}
+
+/* ============================================================
+ * 闪电特效（随机分形折线，周期性劈落、闪烁衰减）
+ * ============================================================ */
+const lightningScene = new THREE.Scene();
+lightningScene.background = null;
+lightningScene.visible = false;
+
+let lightningTime = 0;
+const boltState = { freq: 3, branches: 3, forkWeight: 1.0, glow: 1.0, thickness: 1.0, blur: 1.0, color: 0xdceeff };
+let boltTimer = 2;
+let boltFlash = 0;
+let boltLines = [];
+let boltAmbient = 0;      // 环境闪光（背景亮度）
+
+function genBoltPath(x0,y0,z0, x1,y1,z1, disp, depth, out){
+  if(depth <= 0 || disp < 0.05){
+    out.push(x1, y1, z1);
+    return;
+  }
+  const mx = (x0+x1)/2 + (Math.random()-0.5)*disp;
+  const my = (y0+y1)/2 + (Math.random()-0.5)*disp;
+  const mz = (z0+z1)/2 + (Math.random()-0.5)*disp;
+  genBoltPath(x0,y0,z0, mx,my,mz, disp*0.6, depth-1, out);
+  genBoltPath(mx,my,mz, x1,y1,z1, disp*0.6, depth-1, out);
+}
+/* 折线扩展为连续发光带（miter 连续带 + 顶点软边渐变，柔和光晕、无拐角断裂） */
+function perpDir(dx, dy, dz){
+  const len = Math.sqrt(dx*dx + dy*dy + dz*dz) || 1; dx/=len; dy/=len; dz/=len;
+  let ux = 0, uy = 1, uz = 0;
+  if(Math.abs(dy) > 0.99){ ux = 1; uy = 0; }
+  let nx = dy*uz - dz*uy, ny = dz*ux - dx*uz, nz = dx*uy - dy*ux;
+  const nl = Math.sqrt(nx*nx + ny*ny + nz*nz) || 1;
+  return [nx/nl, ny/nl, nz/nl];
+}
+function makeStrip(pts, width, color, opacity, sigma){
+  const n = pts.length / 3;
+  // miter 法线：每顶点由前后段方向平均求得，保证拐角连续无缝隙
+  const norms = [];
+  for(let i = 0; i < n; i++){
+    if(i === 0){
+      norms.push(perpDir(pts[3]-pts[0], pts[4]-pts[1], pts[5]-pts[2]));
+    } else if(i === n-1){
+      norms.push(perpDir(pts[i*3]-pts[(i-1)*3], pts[i*3+1]-pts[(i-1)*3+1], pts[i*3+2]-pts[(i-1)*3+2]));
+    } else {
+      const d1x = pts[i*3]-pts[(i-1)*3], d1y = pts[i*3+1]-pts[(i-1)*3+1], d1z = pts[i*3+2]-pts[(i-1)*3+2];
+      const d2x = pts[(i+1)*3]-pts[i*3], d2y = pts[(i+1)*3+1]-pts[i*3+1], d2z = pts[(i+1)*3+2]-pts[i*3+2];
+      norms.push(perpDir(d1x+d2x, d1y+d2y, d1z+d2z));
+    }
+  }
+  const verts = [], edges = [], idx = [];
+  for(let i = 0; i < n; i++){
+    const px = pts[i*3], py = pts[i*3+1], pz = pts[i*3+2];
+    const [nx, ny, nz] = norms[i];
+    const hw = width/2;
+    verts.push(px+nx*hw, py+ny*hw, pz+nz*hw);  edges.push(1);
+    verts.push(px-nx*hw, py-ny*hw, pz-nz*hw);  edges.push(-1);
+  }
+  for(let i = 0; i < n-1; i++){
+    const v = i*2;
+    idx.push(v, v+1, v+2, v+1, v+3, v+2);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts), 3));
+  geo.setAttribute('aEdge', new THREE.BufferAttribute(new Float32Array(edges), 1));
+  geo.setIndex(idx);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uColor: { value: new THREE.Color(color) }, uOpacity: { value: opacity }, uSigma: { value: sigma || 0.1 } },
+    vertexShader: `
+      attribute float aEdge;
+      varying float vEdge;
+      void main(){
+        vEdge = aEdge;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `
+      precision highp float;
+      varying float vEdge;
+      uniform vec3 uColor;
+      uniform float uOpacity;
+      uniform float uSigma;
+      void main(){
+        // 高斯分布：σ 远小于带宽，保证在几何边缘前已衰减到近 0，无硬边截断
+        float a = exp(-(vEdge * vEdge) / (2.0 * uSigma * uSigma));
+        gl_FragColor = vec4(uColor, a * uOpacity);
+      }`,
+    transparent: true,
+    depthTest: false,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.frustumCulled = false;
+  return mesh;
+}
+function addBoltLine(pts, alphaK){
+  const group = new THREE.Group();
+  group.userData.alphaK = alphaK;
+  const t = boltState.thickness;     // 粗细
+  const bl = boltState.blur;         // 模糊（光晕弥散范围）
+  const w = t * alphaK;
+  // 4 层：细亮电弧 + 三级弥散光晕（由内而外渐淡渐宽，高斯柔和）
+  group.add(makeStrip(pts, 0.15 * w, 0xffffff, 0.95, 0.03 * w));                 // 电弧（细亮白）
+  group.add(makeStrip(pts, 1.2 * w, boltState.color, 0.45, 0.24 * w));            // 内光晕
+  group.add(makeStrip(pts, 3.5 * bl * w, boltState.color, 0.16, 0.7 * bl * w));   // 外光晕（随模糊扩大）
+  group.add(makeStrip(pts, 7.0 * bl * bl * w, boltState.color, 0.06, 1.4 * bl * bl * w)); // 最外光晕
+  lightningScene.add(group);
+  boltLines.push(group);
+}
+function clearBolts(){
+  boltLines.forEach(g => {
+    lightningScene.remove(g);
+    g.children.forEach(m => { m.geometry.dispose(); m.material.dispose(); });
+  });
+  boltLines = [];
+}
+function triggerBolt(){
+  clearBolts();
+  const sx = 0, sz = 0;                              // 激发起点固定于原点上方
+  const ex = (Math.random()-0.5)*14, ez = (Math.random()-0.5)*14;   // 落点随机
+  const pts = [sx, 24, sz];
+  genBoltPath(sx,24,sz, ex,0.2,ez, 5.0, 7, pts);
+  addBoltLine(pts, 1.0);
+  const nB = Math.max(0, Math.round(boltState.branches * boltState.forkWeight));   // 分叉权重调制数量
+  const fw = boltState.forkWeight;
+  for(let b = 0; b < nB; b++){
+    const seg = Math.floor(Math.random() * (pts.length/3 - 2)) + 1;
+    const bx = pts[seg*3], by = pts[seg*3+1], bz = pts[seg*3+2];
+    const bpts = [bx, by, bz];
+    genBoltPath(bx,by,bz, bx+(Math.random()-0.5)*4*fw, Math.max(0.2, by-4*fw), bz+(Math.random()-0.5)*4*fw, 1.5, 4, bpts);
+    addBoltLine(bpts, 0.55);
+  }
+  boltFlash = 0.55;
+  boltAmbient = 0.35 * boltState.glow;
+}
+function updateLightning(dt){
+  if(boltFlash > 0){
+    boltFlash -= dt;
+    // 闪烁：初亮，随后快闪衰减
+    let op;
+    if(boltFlash > 0.4) op = 1.0;
+    else op = (Math.sin(boltFlash * 45) > 0) ? 1.0 : 0.12;
+    const o = op * Math.min(1, boltState.glow);
+    boltLines.forEach(g => g.children.forEach(m => m.material.uniforms.uOpacity.value = o * g.userData.alphaK));
+    boltAmbient = Math.max(0, boltAmbient - dt * 2.0);
+    if(boltFlash <= 0){ clearBolts(); boltAmbient = 0; }
+  } else {
+    boltTimer -= dt;
+    if(boltTimer <= 0){
+      triggerBolt();
+      boltTimer = boltState.freq * (0.6 + Math.random() * 1.2);
+    }
+  }
+}
+
+/* 当前模式场景渲染 */
+function renderCurrent(){
+  renderer.render(
+    mode === 'flame' ? flameScene : mode === 'lightning' ? lightningScene : scene,
+    camera
+  );
+}
+
+/* 激活指定标签页 */
+function activateTab(name){
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  pages.forEach(p => { $('tab-' + p).style.display = (p === name) ? '' : 'none'; });
+}
+
+/* 模式切换 */
+function setMode(m){
+  if(m === mode) return;
+  if(state.recording){ $('exportStatus').textContent = '录制中，请先停止再切换模式。'; $('exportStatus').className = 'err'; return; }
+  mode = m;
+  stopMotion();
+  controls.enabled = true;
+  if(m === 'tool'){
+    scene.visible = true;
+    flameScene.visible = false;
+    lightningScene.visible = false;
+    // 恢复全部标签页（网格/相机/动画/贴图/导出）
+    document.querySelectorAll('#tabs button').forEach(b => b.style.display = '');
+    activateTab('grid');
+    $('flamePanel').style.display = 'none';
+    $('lightningPanel').style.display = 'none';
+    camera.fov = parseFloat($('camFov').value);   // 恢复工具模式的视场角
+    camera.updateProjectionMatrix();
+    camera.position.set(9, 6, 9);
+    controls.lookAt(0, 0, 0);
+    controls.update();
+  } else if(m === 'flame'){
+    scene.visible = false;
+    flameScene.visible = true;
+    lightningScene.visible = false;
+    // 火焰模式仅保留「导出」标签页，隐藏网格模式专属面板
+    document.querySelectorAll('#tabs button').forEach(b => {
+      b.style.display = (b.dataset.tab === 'export') ? '' : 'none';
+    });
+    activateTab('export');
+    $('flamePanel').style.display = 'block';
+    $('lightningPanel').style.display = 'none';
+    camera.fov = 60;                              // 宽视场，完整容纳火焰（含底部火源）
+    camera.updateProjectionMatrix();
+    camera.position.set(8, 8, 8);
+    controls.lookAt(0, 4, 0);
+    controls.update();
+    setFlameHeight(4);   // 固定视角校准（粒子火焰高度由参数自然决定）
+  } else {
+    scene.visible = false;
+    flameScene.visible = false;
+    lightningScene.visible = true;
+    // 闪电模式仅保留「导出」标签页
+    document.querySelectorAll('#tabs button').forEach(b => {
+      b.style.display = (b.dataset.tab === 'export') ? '' : 'none';
+    });
+    activateTab('export');
+    $('flamePanel').style.display = 'none';
+    $('lightningPanel').style.display = 'block';
+    camera.fov = 60;
+    camera.updateProjectionMatrix();
+    camera.position.set(14, 12, 14);
+    controls.lookAt(0, 10, 0);
+    controls.update();
+  }
+}
+$('modeSel').addEventListener('change', e => setMode(e.target.value));
+
+/* 火焰参数绑定 */
+bindSlider('flameDirX', 'flameDirXVal', v => (+v).toFixed(2), v => flamePartState.dirX = v);   // 喷射主方向 X
+bindSlider('flameDirZ', 'flameDirZVal', v => (+v).toFixed(2), v => flamePartState.dirZ = v);   // 喷射主方向 Z
+bindSlider('flameSpread', 'flameSpreadVal', v => (+v).toFixed(2), v => flamePartState.dirVar = v); // 喷射方向变化范围
+bindSlider('flameDirJitter', 'flameDirJitterVal', v => (+v).toFixed(1), v => flamePartState.dirJitter = v); // 扰动速度
+bindSlider('flameVel', 'flameVelVal', v => (+v).toFixed(1), v => flamePartState.vel = v);          // 初速度
+bindSlider('flameGlow', 'flameGlowVal', v => (+v).toFixed(2), v => flamePartState.bright = v);     // 亮度
+bindSlider('flameDensity', 'flameDensityVal', v => (+v).toFixed(2), v => {                          // 喷出粒子量
+  flamePartState.count = Math.min(8000, Math.round(2500 * v));   // 上限防粒子过多导致卡死
+  rebuildFlameParticles();
+});
+bindSlider('flameSize', 'flameSizeVal', v => (+v).toFixed(2), v => flamePartState.size = v);          // 粒子大小
+bindSlider('flameLife', 'flameLifeVal', v => (+v).toFixed(2), v => flamePartState.life = v);          // 寿命基准
+bindSlider('flameLifeVar', 'flameLifeVarVal', v => (+v).toFixed(2), v => flamePartState.lifeVar = v); // 寿命浮动幅度
+$('flameColor') && $('flameColor').remove();   // 清理旧单色选择器（如有）
+[['flameC1',0],['flameC2',1],['flameC3',2],['flameC4',3]].forEach(([id, idx]) => {
+  $(id).addEventListener('input', e => {
+    $(id + 'Val').textContent = e.target.value;
+    const c = new THREE.Color(e.target.value);
+    flamePartState.colors[idx] = { r: c.r, g: c.g, b: c.b };   // 四节点火焰渐变
+  });
+});
+bindSlider('flameOct', 'flameOctVal', v => v, v => {
+  if(flamePts) flamePts.mat.uniforms.uJitter.value = 0.2 + v * 0.15;   // 粒子形状噪声扰动强度
+});
+/* 火星参数 */
+bindSlider('sparkCount', 'sparkCountVal', v => Math.round(v), v => { sparkParam.count = Math.round(v); rebuildSparks(); });
+bindSlider('sparkSize', 'sparkSizeVal', v => (+v).toFixed(1), v => sparkParam.size = v);
+bindSlider('sparkVel', 'sparkVelVal', v => (+v).toFixed(1), v => sparkParam.vel = v);
+bindSlider('sparkLife', 'sparkLifeVal', v => (+v).toFixed(1), v => sparkParam.life = v);
+$('flameGround').addEventListener('change', e => flameFloor.visible = e.target.checked);
+/* 闪电参数 */
+bindSlider('boltFreq', 'boltFreqVal', v => (+v).toFixed(1) + 's', v => boltState.freq = v);
+bindSlider('boltBranches', 'boltBranchesVal', v => Math.round(v), v => boltState.branches = Math.round(v));
+bindSlider('boltFork', 'boltForkVal', v => (+v).toFixed(2), v => boltState.forkWeight = v);
+bindSlider('boltGlow', 'boltGlowVal', v => (+v).toFixed(2), v => boltState.glow = v);
+bindSlider('boltThick', 'boltThickVal', v => (+v).toFixed(2), v => boltState.thickness = v);
+bindSlider('boltBlur', 'boltBlurVal', v => (+v).toFixed(2), v => boltState.blur = v);
+$('boltColor').addEventListener('input', e => {
+  $('boltColorVal').textContent = e.target.value;
+  boltState.color = new THREE.Color(e.target.value).getHex();
+});
+$('btnBolt').addEventListener('click', () => triggerBolt());   // 立即激发一次闪电
+
+/* ============================================================
+ * 视频导出（透明背景 WebM）
+ * ============================================================ */
+let fpsVal = 30, bitrateVal = 12;
+bindSlider('fps', 'fpsVal', v => v, v => fpsVal = v);
+bindSlider('bitrate', 'bitrateVal', v => v, v => bitrateVal = v);
+
+function pickMimeType(fmt){
+  const candidates = fmt === 'mp4'
+    ? ['video/mp4;codecs=avc1.42E01E', 'video/mp4;codecs=avc1', 'video/mp4']
+    : ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+  for(const c of candidates){
+    if(window.MediaRecorder && MediaRecorder.isTypeSupported(c)) return c;
+  }
+  return '';
+}
+function fmtExt(){
+  const v = $('vidFmt').value;
+  return v === 'mp4' ? 'mp4' : v === 'gif' ? 'gif' : 'webm';
+}
+function exportBase(){ return mode === 'flame' ? 'flame' : mode === 'lightning' ? 'lightning' : 'camera-tween'; }
+function exportBasePNG(){ return mode === 'flame' ? 'flame-frame' : mode === 'lightning' ? 'lightning-frame' : 'camera-frame'; }
+
+function exportVideo(){
+  if(mode === 'tool' && (!state.kfA || !state.kfB)){
+    $('exportStatus').textContent = '请先在「相机」页设置首尾帧 A 和 B。';
+    $('exportStatus').className = 'err';
+    return;
+  }
+  if($('vidFmt').value === 'gif'){ exportGIF(); return; }
+  if(!window.MediaRecorder){
+    $('exportStatus').textContent = '当前浏览器不支持 MediaRecorder，无法录制。请使用最新版 Chrome / Edge。';
+    $('exportStatus').className = 'err';
+    return;
+  }
+
+  const fmt = $('vidFmt').value;
+  const mime = pickMimeType(fmt);
+  if(!mime){
+    $('exportStatus').textContent = fmt === 'mp4'
+      ? '当前浏览器不支持 MP4(H.264) 录制。请改用 WebM 格式，或使用 Chrome 126+ / Edge / Safari。'
+      : '浏览器不支持 WebM 录制。请使用 Chrome / Edge。';
+    $('exportStatus').className = 'err';
+    return;
+  }
+
+  const dur = getDuration();
+  const prevBg = state.bgMode;
+  // WebM 保留透明背景；MP4 不支持透明，录制时垫上背景色
+  if(fmt === 'webm'){ state.bgMode = 'transparent'; applyBg(); }
+  else { state.bgMode = 'color'; applyBg(); }
+
+  stopMotion();
+  controls.enabled = false;
+  if(mode === 'tool') driveCamera(0);
+  renderCurrent();
+
+  const stream = renderer.domElement.captureStream(fpsVal);
+  const rec = new MediaRecorder(stream, {
+    mimeType: mime,
+    videoBitsPerSecond: bitrateVal * 1_000_000,
+  });
+  state.recChunks = [];
+  state.recorder = rec;
+  rec.ondataavailable = e => { if(e.data && e.data.size) state.recChunks.push(e.data); };
+  rec.onstop = () => {
+    const ext = fmtExt();
+    const blob = new Blob(state.recChunks, { type: fmt === 'mp4' ? 'video/mp4' : 'video/webm' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = exportBase() + '.' + ext;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    // 恢复背景设置
+    state.bgMode = prevBg;
+    applyBg();
+    controls.enabled = true;
+    $('recBadge').style.display = 'none';
+    $('exportStatus').textContent = `✅ 已导出 ${exportBase()}.${ext}（${(blob.size/1048576).toFixed(2)} MB，${dur.toFixed(1)}s @${fpsVal}fps，${fmt === 'webm' ? '透明背景' : '含背景色'}）`;
+    $('exportStatus').className = 'ok';
+    state.recording = false;
+    state.recorder = null;
+    curveMarker = null;
+  };
+
+  rec.start(100);
+  state.recording = true;
+  state.recStart = performance.now();
+  state.animTime = 0;
+  driveCamera(0);
+  $('recBadge').style.display = 'flex';
+  $('exportStatus').textContent = `录制中…（${mime}）`;
+  $('exportStatus').className = '';
+}
+$('btnExport').addEventListener('click', exportVideo);
+
+/* 导出当前帧 PNG（透明背景，可选高分辨率） */
+function exportPNG(){
+  if(state.recording) return;
+  const sel = $('pngRes').value;
+  let w, h;
+  if(sel === 'viewport'){
+    w = renderer.domElement.width;
+    h = renderer.domElement.height;
+  } else {
+    const tw = parseInt(sel, 10);
+    const aspect = canvas.clientWidth / canvas.clientHeight;
+    w = tw;
+    h = Math.max(1, Math.round(tw / aspect));
+  }
+  // 临时把渲染缓冲设为目标分辨率渲染一帧，随后恢复
+  const prevPR = renderer.getPixelRatio();
+  renderer.setPixelRatio(1);
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  if(mode === 'flame'){ /* 粒子方案无需相机矩阵同步 */ }
+  renderCurrent();
+  const url = renderer.domElement.toDataURL('image/png');
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${exportBasePNG()}-${w}x${h}.png`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  // 恢复视口
+  renderer.setPixelRatio(prevPR);
+  resize();
+  $('exportStatus').textContent = `✅ 已导出 ${exportBasePNG()}-${w}x${h}.png（当前帧，透明背景）`;
+  $('exportStatus').className = 'ok';
+}
+$('btnPNG').addEventListener('click', exportPNG);
+
+/* ============================================================
+ * GIF 导出（透明背景：GIF 二值透明，256色）
+ * ============================================================ */
+let gifFpsVal = 15, gifScaleVal = 100;
+bindSlider('gifFps', 'gifFpsVal', v => v, v => gifFpsVal = v);
+bindSlider('gifScale', 'gifScaleVal', v => v + '%', v => gifScaleVal = v);
+
+function exportGIF(){
+  if(mode === 'tool' && (!state.kfA || !state.kfB)){
+    $('exportStatus').textContent = '请先在「相机」页设置首尾帧 A 和 B。';
+    $('exportStatus').className = 'err';
+    return;
+  }
+  if(state.recording) return;
+
+  const dur = getDuration();
+  const frames = Math.max(2, Math.round(dur * gifFpsVal));
+  const scale = gifScaleVal / 100;
+  const srcW = renderer.domElement.width, srcH = renderer.domElement.height;
+  const W = Math.max(1, Math.round(srcW * scale));
+  const H = Math.max(1, Math.round(srcH * scale));
+  const delay = Math.round(1000 / gifFpsVal);
+
+  const prevBg = state.bgMode;
+  applyBg();   // GIF 背景沿用「背景设置」（透明或纯色）
+  stopMotion();
+  controls.enabled = false;
+  state.exporting = true;   // 暂停 rAF 粒子更新，避免双循环冲突
+
+  const off = document.createElement('canvas');
+  off.width = W; off.height = H;
+  const octx = off.getContext('2d', { willReadFrequently: true });
+  const gif = GIFEncoder();
+  const SENT = [0, 0, 1]; // 哨兵色：标记透明像素（GIF 无半透明，二值化处理）
+
+  $('exportStatus').textContent = `GIF 生成中… 0/${frames} 帧（请稍候）`;
+  $('exportStatus').className = '';
+
+  let f = 0;
+  const BATCH = 12;
+  function runBatch(){
+    for(let k = 0; k < BATCH && f < frames; k++, f++){
+      if(mode === 'tool') driveCamera(f / (frames - 1));
+      else if(mode === 'flame'){ flameTime += 1 / gifFpsVal; updateFlameParticles(1 / gifFpsVal); updateSparks(1 / gifFpsVal); }
+      else { lightningTime += 1 / gifFpsVal; updateLightning(1 / gifFpsVal); }
+      renderCurrent();
+      octx.drawImage(renderer.domElement, 0, 0, W, H);
+      const rgba = octx.getImageData(0, 0, W, H).data;
+      const buf = new Uint8ClampedArray(rgba);
+      // 透明背景 → 半透明二值化为哨兵透明；纯色背景 → 铺背景色且全帧不透明
+      if(state.bgMode === 'transparent'){
+        for(let i = 0; i < buf.length; i += 4){
+          if(buf[i+3] < 128){ buf[i] = SENT[0]; buf[i+1] = SENT[1]; buf[i+2] = SENT[2]; }
+          buf[i+3] = 255;
+        }
+      } else {
+        const _bgc = new THREE.Color(state.bgColor);
+        const _br = Math.round(_bgc.r * 255), _bg = Math.round(_bgc.g * 255), _bb = Math.round(_bgc.b * 255);
+        for(let i = 0; i < buf.length; i += 4){
+          if(buf[i+3] < 128){ buf[i] = _br; buf[i+1] = _bg; buf[i+2] = _bb; }
+          buf[i+3] = 255;
+        }
+      }
+      const palette = quantize(buf, 256);
+      const index = applyPalette(buf, palette);
+      const useTrans = state.bgMode === 'transparent';
+      let tIdx = 0, best = Infinity;
+      if(useTrans){
+        for(let i = 0; i < 256; i++){
+          const r = palette[i*3], g = palette[i*3+1], b = palette[i*3+2];
+          const d = (r-SENT[0])**2 + (g-SENT[1])**2 + (b-SENT[2])**2;
+          if(d < best){ best = d; tIdx = i; }
+        }
+        for(let i = 0; i < index.length; i++){
+          const p = i * 4;
+          if(buf[p] === SENT[0] && buf[p+1] === SENT[1] && buf[p+2] === SENT[2]) index[i] = tIdx;
+        }
+      }
+      gif.writeFrame(index, W, H, { palette, delay, transparent: useTrans, transparentIndex: tIdx });
+      $('exportStatus').textContent = `GIF 生成中… ${f+1}/${frames} 帧（后台生成中）`;
+      $('exportStatus').className = '';
+    }
+    if(f >= frames){
+      gif.finish();
+      const blob = new Blob([gif.bytes()], { type: 'image/gif' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = exportBase() + '.gif';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      state.bgMode = prevBg;
+      applyBg();
+      controls.enabled = true;
+      state.exporting = false;   // 恢复 rAF 粒子更新
+      curveMarker = null;
+      $('exportStatus').textContent = `✅ 已导出 ${exportBase()}.gif（${(blob.size/1048576).toFixed(2)} MB，${frames} 帧 @${gifFpsVal}fps，${dur.toFixed(1)}s，透明背景）`;
+      $('exportStatus').className = 'ok';
+      return;
+    }
+    setTimeout(runBatch, 0);   // 每批让出主线程，避免页面卡死
+  }
+  runBatch();
+}
+
+/* 格式切换联动 */
+$('vidFmt').addEventListener('change', () => {
+  const gif = $('vidFmt').value === 'gif';
+  $('gifOpts').style.display = gif ? '' : 'none';
+  $('fpsRow').style.display = gif ? 'none' : '';
+  $('bitrateRow').style.display = gif ? 'none' : '';
+  updateKFText();
+});
+
+/* ============================================================
+ * 主循环
+ * ============================================================ */
+const clock = new THREE.Clock();
+function resize(){
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+function animate(){
+  requestAnimationFrame(animate);
+  try {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  if(mode === 'flame' && !state.exporting){   // GIF 导出期间由导出批次独占推进粒子
+    flameTime += dt;
+    updateFlameParticles(dt);
+    updateSparks(dt);
+  } else if(mode === 'lightning' && !state.exporting){
+    lightningTime += dt;
+    updateLightning(dt);
+  }
+
+  // —— 录制 / 播放驱动 ——
+  if(state.recording){
+    state.animTime = (performance.now() - state.recStart) / 1000;
+    const dur = getDuration();
+    if(state.animTime >= dur){
+      state.animTime = dur;
+      if(mode === 'tool') driveCamera(1);
+      renderCurrent();
+      // 动画播完，停止录制（onstop 里完成下载与状态恢复）
+      if(state.recorder){
+        state.recorder.stop();
+        state.recorder = null;
+      }
+    } else {
+      if(mode === 'tool') driveCamera(state.animTime / dur);
+    }
+  } else if(state.playing){
+    state.animTime += dt;
+    const dur = getDuration();
+    if(state.animTime >= dur){
+      if($('loopAnim').checked){
+        state.animTime %= dur;
+      } else {
+        state.animTime = dur;
+        state.playing = false;
+        $('playBadge').style.display = 'none';
+        controls.enabled = true;
+      }
+    }
+    if(mode === 'tool') driveCamera(state.animTime / dur);
+  }
+
+  // —— 实时状态显示 ——
+  $('timeBadge').textContent = `t=${state.animTime.toFixed(2)}s / ${getDuration().toFixed(2)}s`;
+  $('camPosText').textContent = `(${camera.position.x.toFixed(1)}, ${camera.position.y.toFixed(1)}, ${camera.position.z.toFixed(1)})`;
+  if(state.playing || state.recording){
+    curveMarker = { t: state.animTime / getDuration(), s: sampleCurve(state.animTime / getDuration()) };
+  }
+
+  // —— 网格平面跟随相机（无尽延伸），LOD 也以相机为基准 ——
+  gridPlane.position.set(camera.position.x, 0, camera.position.z);
+  gridUniforms.uCamPos.value.set(camera.position.x, camera.position.z);
+
+  controls.update();
+  renderCurrent();
+  drawCurve();
+  } catch(err){ console.error('动画循环异常：', err); }
+}
+
+animate();
+</script>
+</body>
+</html>
